@@ -101,6 +101,7 @@ class PhoneExchangeController extends Controller
                     'purchase_invoice_id' => $intakeInvoice->id,
                     'product_variant_color_id' => $oldSku->id,
                     'quantity' => 1,
+                    'demo_quantity' => 0,
                     'unit_cost' => $exchangeValue,
                     'line_total' => $exchangeValue,
                     'warranty_months' => $data['old_phone']['warranty_months'] ?? null,

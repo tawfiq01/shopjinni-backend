@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InventoryStock extends Model
 {
-    protected $fillable = ['branch_id', 'product_variant_color_id', 'quantity'];
+    protected $fillable = ['branch_id', 'product_variant_color_id', 'quantity', 'demo_quantity'];
 
     public function branch(): BelongsTo
     {

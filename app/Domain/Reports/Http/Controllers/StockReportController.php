@@ -55,6 +55,10 @@ class StockReportController extends Controller
             ->groupBy('product_variant_color_id')
             ->pluck('total', 'product_variant_color_id');
 
+        $stockDemoCounts = InventoryStock::where('branch_id', $branchId)
+            ->whereIn('product_variant_color_id', $skus->pluck('id'))
+            ->pluck('demo_quantity', 'product_variant_color_id');
+
         // Weighted-average FIFO cost for quantity-based SKUs, from whichever
         // batches still have remaining_quantity > 0 (company-wide — batches
         // aren't branch-scoped, see InventoryService::transferQuantity).
@@ -82,7 +86,7 @@ class StockReportController extends Controller
 
         $canViewCost = $request->user()->can('reports.view-cost');
 
-        $rows = $skus->map(function (ProductVariantColor $sku) use ($stockBySku, $imeiCounts, $demoCounts, $avgCostBySku, $avgImeiCostBySku, $canViewCost) {
+        $rows = $skus->map(function (ProductVariantColor $sku) use ($stockBySku, $imeiCounts, $demoCounts, $stockDemoCounts, $avgCostBySku, $avgImeiCostBySku, $canViewCost) {
             $model = $sku->variant->model;
             $imeiTracked = $sku->resolvedImeiTrackingEnabled();
             $quantity = $imeiTracked ? ($imeiCounts[$sku->id] ?? 0) : ($stockBySku[$sku->id] ?? 0);
@@ -104,7 +108,7 @@ class StockReportController extends Controller
                 'product_type' => $model->productType->name,
                 'imei_tracking_enabled' => $imeiTracked,
                 'quantity' => $quantity,
-                'demo_quantity' => $imeiTracked ? ($demoCounts[$sku->id] ?? 0) : 0,
+                'demo_quantity' => $imeiTracked ? ($demoCounts[$sku->id] ?? 0) : ($stockDemoCounts[$sku->id] ?? 0),
                 'reorder_level' => $sku->reorder_level,
                 'is_low_stock' => $sku->reorder_level > 0 && $quantity <= $sku->reorder_level,
                 ...($canViewCost ? [

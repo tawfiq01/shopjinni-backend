@@ -288,4 +288,29 @@ class SalesTest extends TestCase
         $response->assertJsonMissingPath('data.total_cost');
         $this->assertArrayNotHasKey('unit_cost', $response->json('data.items.0'));
     }
+
+    public function test_pos_search_surfaces_demo_quantity_for_non_imei_skus(): void
+    {
+        $this->bootLedger();
+        $this->actingAsAdmin();
+        $sku = $this->nonImeiSku();
+
+        $distributor = Distributor::factory()->create();
+        $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [[
+                'product_variant_color_id' => $sku->id,
+                'quantity' => 10,
+                'demo_quantity' => 4,
+                'unit_cost' => 500,
+            ]],
+        ])->assertCreated();
+
+        $response = $this->getJson('/api/pos/search?q='.$sku->sku)->assertOk();
+        $candidate = collect($response->json('data'))->firstWhere('product_variant_color_id', $sku->id);
+
+        $this->assertSame(10, $candidate['available_quantity']);
+        $this->assertSame(4, $candidate['demo_quantity']);
+    }
 }

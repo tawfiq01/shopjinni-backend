@@ -17,6 +17,7 @@ class PurchaseItem extends Model
         'purchase_invoice_id',
         'product_variant_color_id',
         'quantity',
+        'demo_quantity',
         'unit_cost',
         'discount',
         'tax',

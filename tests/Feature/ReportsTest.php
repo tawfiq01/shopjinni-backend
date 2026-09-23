@@ -201,6 +201,31 @@ class ReportsTest extends TestCase
         $this->assertSame(2, $row['demo_quantity']);
     }
 
+    public function test_stock_report_breaks_out_demo_quantity_for_non_imei_skus(): void
+    {
+        $this->bootLedger();
+        $this->actingAsAdmin();
+        $sku = $this->nonImeiSku();
+        $distributor = Distributor::factory()->create();
+
+        $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [[
+                'product_variant_color_id' => $sku->id,
+                'quantity' => 10,
+                'demo_quantity' => 4,
+                'unit_cost' => 500,
+            ]],
+        ])->assertCreated();
+
+        $response = $this->getJson('/api/reports/stock')->assertOk();
+        $row = collect($response->json('data'))->firstWhere('sku_id', $sku->id);
+
+        $this->assertSame(10, $row['quantity']);
+        $this->assertSame(4, $row['demo_quantity']);
+    }
+
     public function test_sales_report_summary_totals_and_hides_profit_from_salesperson(): void
     {
         $this->bootLedger();
@@ -228,6 +253,68 @@ class ReportsTest extends TestCase
         $this->actingAsSalesperson();
         $spResponse = $this->getJson('/api/reports/sales/summary')->assertOk();
         $spResponse->assertJsonMissingPath('total_profit');
+    }
+
+    public function test_sales_details_report_lists_line_items_and_hides_cost_from_salesperson(): void
+    {
+        $this->bootLedger();
+        $this->actingAsAdmin();
+        $sku = $this->nonImeiSku();
+        $distributor = Distributor::factory()->create();
+
+        $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [['product_variant_color_id' => $sku->id, 'quantity' => 5, 'unit_cost' => 500]],
+        ])->assertCreated();
+
+        $cash = \App\Domain\Accounting\Models\PaymentMethod::where('name', 'Cash')->firstOrFail();
+        $this->postJson('/api/sales', [
+            'sale_date' => now()->toDateString(),
+            'items' => [['product_variant_color_id' => $sku->id, 'quantity' => 2, 'unit_price' => 800]],
+            'payments' => [['payment_method_id' => $cash->id, 'amount' => 1600]],
+        ])->assertCreated();
+
+        $adminResponse = $this->getJson('/api/reports/sales/details')->assertOk();
+        $this->assertSame(2, $adminResponse->json('total_quantity'));
+        $this->assertEquals(1600.0, $adminResponse->json('total_sales'));
+        $this->assertEquals(600.0, $adminResponse->json('total_profit'));
+        $rows = $adminResponse->json('rows');
+        $this->assertCount(1, $rows);
+        $this->assertEquals(600.0, $rows[0]['profit']);
+        $this->assertEquals(500.0, $rows[0]['unit_cost']);
+
+        $this->actingAsSalesperson();
+        $spResponse = $this->getJson('/api/reports/sales/details')->assertOk();
+        $spResponse->assertJsonMissingPath('total_profit');
+        $this->assertArrayNotHasKey('unit_cost', $spResponse->json('rows.0'));
+        $this->assertArrayNotHasKey('profit', $spResponse->json('rows.0'));
+    }
+
+    public function test_sales_details_export_downloads_an_xlsx_workbook(): void
+    {
+        $this->bootLedger();
+        $this->actingAsAdmin();
+        $sku = $this->nonImeiSku();
+        $distributor = Distributor::factory()->create();
+
+        $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [['product_variant_color_id' => $sku->id, 'quantity' => 5, 'unit_cost' => 500]],
+        ])->assertCreated();
+
+        $cash = \App\Domain\Accounting\Models\PaymentMethod::where('name', 'Cash')->firstOrFail();
+        $this->postJson('/api/sales', [
+            'sale_date' => now()->toDateString(),
+            'items' => [['product_variant_color_id' => $sku->id, 'quantity' => 2, 'unit_price' => 800]],
+            'payments' => [['payment_method_id' => $cash->id, 'amount' => 1600]],
+        ])->assertCreated();
+
+        $response = $this->get('/api/reports/sales/details/export');
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertNotEmpty($response->streamedContent());
     }
 
     public function test_purchase_report_requires_cost_visibility_permission(): void

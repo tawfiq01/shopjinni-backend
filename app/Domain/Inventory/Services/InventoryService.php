@@ -81,9 +81,13 @@ class InventoryService
 
         $stock = InventoryStock::firstOrCreate(
             ['branch_id' => $branchId, 'product_variant_color_id' => $sku->id],
-            ['quantity' => 0]
+            ['quantity' => 0, 'demo_quantity' => 0]
         );
         $stock->increment('quantity', $purchaseItem->quantity);
+
+        if ($purchaseItem->demo_quantity > 0) {
+            $stock->increment('demo_quantity', $purchaseItem->demo_quantity);
+        }
     }
 
     /**

@@ -37,6 +37,7 @@ class PurchaseInvoiceResource extends JsonResource
                     $item->sku->color->name,
                 ),
                 'quantity' => $item->quantity,
+                'demo_quantity' => $item->demo_quantity,
                 'remaining_quantity' => $item->remaining_quantity,
                 'unit_cost' => (float) $item->unit_cost,
                 'discount' => (float) $item->discount,

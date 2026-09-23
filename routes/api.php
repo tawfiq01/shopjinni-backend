@@ -149,6 +149,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/imei-stock', [StockReportController::class, 'imeiUnits']);
         Route::get('/reports/stock-movements', [StockReportController::class, 'movements']);
         Route::get('/reports/sales/summary', [SalesReportController::class, 'summary']);
+        Route::get('/reports/sales/details', [SalesReportController::class, 'details']);
+        Route::get('/reports/sales/details/export', [SalesReportController::class, 'export']);
         Route::get('/reports/dues', [DueReportController::class, 'index']);
         Route::get('/reports/cash-position', [CashPositionController::class, 'index']);
         Route::get('/reports/imei-history', [ImeiHistoryController::class, 'show']);

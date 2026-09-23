@@ -68,12 +68,12 @@ class PosSearchController extends Controller
                     $candidates[] = $this->imeiCandidate($sku, $unit);
                 }
             } else {
-                $quantity = InventoryStock::where('branch_id', $branchId)
+                $stock = InventoryStock::where('branch_id', $branchId)
                     ->where('product_variant_color_id', $sku->id)
-                    ->value('quantity') ?? 0;
+                    ->first();
 
-                if ($quantity > 0) {
-                    $candidates[] = $this->quantityCandidate($sku, $quantity);
+                if ($stock && $stock->quantity > 0) {
+                    $candidates[] = $this->quantityCandidate($sku, $stock->quantity, $stock->demo_quantity);
                 }
             }
         }
@@ -120,7 +120,7 @@ class PosSearchController extends Controller
         ];
     }
 
-    private function quantityCandidate(ProductVariantColor $sku, int $available): array
+    private function quantityCandidate(ProductVariantColor $sku, int $available, int $demoQuantity = 0): array
     {
         $model = $sku->variant->model;
 
@@ -136,6 +136,7 @@ class PosSearchController extends Controller
                 $sku->color->name,
             ),
             'available_quantity' => $available,
+            'demo_quantity' => $demoQuantity,
             'selling_price_current' => $sku->selling_price_current === null ? null : (float) $sku->selling_price_current,
         ];
     }

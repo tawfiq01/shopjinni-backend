@@ -152,6 +152,48 @@ class PurchaseTest extends TestCase
         $this->assertTrue(ImeiUnit::where('imei1', '555555555555555')->firstOrFail()->is_demo);
     }
 
+    public function test_demo_quantity_can_be_recorded_for_non_imei_purchase_items(): void
+    {
+        $this->actingAsPurchaser();
+        $distributor = Distributor::factory()->create();
+        $sku = $this->nonImeiSku();
+
+        $response = $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [[
+                'product_variant_color_id' => $sku->id,
+                'quantity' => 10,
+                'demo_quantity' => 3,
+                'unit_cost' => 500,
+            ]],
+        ])->assertCreated();
+
+        $this->assertSame(3, $response->json('data.items.0.demo_quantity'));
+
+        $stock = InventoryStock::where('product_variant_color_id', $sku->id)->firstOrFail();
+        $this->assertSame(10, $stock->quantity);
+        $this->assertSame(3, $stock->demo_quantity);
+    }
+
+    public function test_demo_quantity_cannot_exceed_purchased_quantity(): void
+    {
+        $this->actingAsPurchaser();
+        $distributor = Distributor::factory()->create();
+        $sku = $this->nonImeiSku();
+
+        $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [[
+                'product_variant_color_id' => $sku->id,
+                'quantity' => 5,
+                'demo_quantity' => 6,
+                'unit_cost' => 500,
+            ]],
+        ])->assertStatus(422);
+    }
+
     public function test_imei_count_must_match_quantity(): void
     {
         $this->actingAsPurchaser();
