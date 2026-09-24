@@ -7,6 +7,7 @@ use App\Domain\Catalog\Models\ProductModel;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ProductModelController extends Controller
 {
@@ -27,9 +28,11 @@ class ProductModelController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'brand_id' => ['required', 'exists:brands,id'],
-            'product_type_id' => ['required', 'exists:product_types,id'],
+            'brand_id' => ['required', Rule::exists('brands', 'id')->where('company_id', $companyId)],
+            'product_type_id' => ['required', Rule::exists('product_types', 'id')->where('company_id', $companyId)],
             'name' => ['required', 'string', 'max:255'],
             'warranty_months_default' => ['nullable', 'integer', 'min:0'],
             'imei_tracking_enabled' => ['nullable', 'boolean'],
@@ -50,9 +53,11 @@ class ProductModelController extends Controller
 
     public function update(Request $request, ProductModel $productModel)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'brand_id' => ['sometimes', 'exists:brands,id'],
-            'product_type_id' => ['sometimes', 'exists:product_types,id'],
+            'brand_id' => ['sometimes', Rule::exists('brands', 'id')->where('company_id', $companyId)],
+            'product_type_id' => ['sometimes', Rule::exists('product_types', 'id')->where('company_id', $companyId)],
             'name' => ['sometimes', 'string', 'max:255'],
             'warranty_months_default' => ['nullable', 'integer', 'min:0'],
             'imei_tracking_enabled' => ['nullable', 'boolean'],

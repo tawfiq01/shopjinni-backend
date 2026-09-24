@@ -10,6 +10,7 @@ use App\Domain\Auth\Http\Controllers\UserController;
 use App\Domain\Backup\Http\Controllers\BackupSettingController;
 use App\Domain\Branches\Http\Controllers\BranchController;
 use App\Domain\Catalog\Http\Controllers\BrandController;
+use App\Domain\Companies\Http\Controllers\CompanyController;
 use App\Domain\Catalog\Http\Controllers\ColorController;
 use App\Domain\Catalog\Http\Controllers\ProductModelController;
 use App\Domain\Catalog\Http\Controllers\ProductTypeController;
@@ -29,18 +30,77 @@ use App\Domain\Reports\Http\Controllers\ImeiHistoryController;
 use App\Domain\Reports\Http\Controllers\PurchaseReportController;
 use App\Domain\Reports\Http\Controllers\SalesReportController;
 use App\Domain\Reports\Http\Controllers\StockReportController;
+use App\Domain\Companies\Http\Controllers\Admin\CompanyAdminController;
 use App\Domain\Sales\Http\Controllers\PhoneExchangeController;
 use App\Domain\Sales\Http\Controllers\PosSearchController;
 use App\Domain\Sales\Http\Controllers\SalesInvoiceController;
 use App\Domain\Sales\Http\Controllers\SalesReturnController;
+use App\Domain\Subscriptions\Http\Controllers\Admin\PaymentRecordController;
+use App\Domain\Subscriptions\Http\Controllers\Admin\SubscriptionPlanController as AdminSubscriptionPlanController;
+use App\Domain\Subscriptions\Http\Controllers\Admin\SubscriptionController as AdminSubscriptionController;
+use App\Domain\Subscriptions\Http\Controllers\Admin\SystemReportController;
+use App\Domain\Subscriptions\Http\Controllers\SubscriptionController;
+use App\Domain\Subscriptions\Http\Controllers\SubscriptionPlanController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/register', [AuthController::class, 'register']);
+Route::get('/auth/google/redirect', [AuthController::class, 'googleRedirect']);
+Route::get('/auth/google/callback', [AuthController::class, 'googleCallback']);
 
-Route::middleware('auth:sanctum')->group(function () {
+// Public: an <img>/NetworkImage load can't attach an Authorization header,
+// and served through an actual route (not the raw /storage/* symlink) so
+// CORS headers apply for the app's cross-origin (different port) fetch —
+// see CompanyController::logoImage()'s docblock.
+Route::get('/logo/{filename}', [CompanyController::class, 'logoImage']);
+
+// EnsureSubscriptionActive is applied to the WHOLE group (not opted in
+// per feature) — the app's own tenant-isolation design is fail-closed by
+// default, and an opt-in gate would leave every future route group
+// unprotected unless someone remembered to add it. The middleware itself
+// carries the small allowlist (auth/company/subscription/logo/admin) of
+// paths that must keep working even for a blocked shop.
+Route::middleware(['auth:sanctum', 'subscription.active'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/auth/onboarding/complete', [AuthController::class, 'completeOnboarding']);
+
+    // Readable by any authenticated user (the shop name/logo shows up in the app chrome for everyone).
+    Route::get('/company', [CompanyController::class, 'show']);
+    Route::middleware('permission:company.manage')->group(function () {
+        Route::put('/company', [CompanyController::class, 'update']);
+        Route::post('/company/logo', [CompanyController::class, 'uploadLogo']);
+        Route::delete('/company/logo', [CompanyController::class, 'deleteLogo']);
+    });
+
+    // Billing — readable by any authenticated user (dashboard banner needs it too).
+    Route::get('/company/subscription', [SubscriptionController::class, 'show']);
+    Route::get('/subscription/plans', [SubscriptionPlanController::class, 'index']);
+    Route::middleware('permission:company.manage')->group(function () {
+        Route::put('/company/subscription/plan', [SubscriptionController::class, 'changePlan']);
+    });
+
+    // SaaS Super Admin panel — completely cross-tenant, gated by
+    // is_super_admin rather than a per-company Spatie permission.
+    Route::middleware('superadmin')->prefix('admin')->group(function () {
+        Route::get('/companies', [CompanyAdminController::class, 'index']);
+        Route::get('/companies/{company}', [CompanyAdminController::class, 'show']);
+        Route::post('/companies/{company}/activate', [CompanyAdminController::class, 'activate']);
+        Route::post('/companies/{company}/deactivate', [CompanyAdminController::class, 'deactivate']);
+
+        Route::get('/plans', [AdminSubscriptionPlanController::class, 'index']);
+        Route::post('/plans', [AdminSubscriptionPlanController::class, 'store']);
+        Route::put('/plans/{plan}', [AdminSubscriptionPlanController::class, 'update']);
+
+        Route::get('/subscriptions', [AdminSubscriptionController::class, 'index']);
+        Route::put('/subscriptions/{company}/status', [AdminSubscriptionController::class, 'updateStatus']);
+
+        Route::get('/payments', [PaymentRecordController::class, 'index']);
+        Route::post('/payments', [PaymentRecordController::class, 'store']);
+
+        Route::get('/reports/summary', [SystemReportController::class, 'summary']);
+    });
 
     // Readable by any authenticated user (POS/reporting screens need this too).
     Route::get('/catalog/brands', [BrandController::class, 'index']);
@@ -186,6 +246,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
         Route::get('/roles', [RoleController::class, 'index']);
+        Route::post('/roles', [RoleController::class, 'store']);
+        Route::put('/roles/{role}', [RoleController::class, 'update']);
+        Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
+        Route::get('/permissions', [RoleController::class, 'permissions']);
     });
 
     // Database backup — Admin only.

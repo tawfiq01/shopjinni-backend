@@ -3,10 +3,10 @@
 namespace Tests\Feature;
 
 use App\Domain\Backup\Models\BackupSetting;
+use App\Domain\Companies\Models\Company;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class BackupSettingTest extends TestCase
@@ -16,11 +16,10 @@ class BackupSettingTest extends TestCase
     private function actingAsAdmin(): User
     {
         Permission::firstOrCreate(['name' => 'backup.manage', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo('backup.manage');
 
-        $user = User::factory()->create();
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['backup.manage']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -28,7 +27,8 @@ class BackupSettingTest extends TestCase
 
     private function actingAsSalesperson(): User
     {
-        $user = User::factory()->create();
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
         $this->actingAs($user, 'sanctum');
 
         return $user;

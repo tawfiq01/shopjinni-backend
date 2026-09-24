@@ -11,6 +11,7 @@ use App\Domain\Inventory\Services\InventoryService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -31,15 +32,17 @@ class StockTransferController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'from_branch_id' => ['required', 'different:to_branch_id', 'exists:branches,id'],
-            'to_branch_id' => ['required', 'exists:branches,id'],
+            'from_branch_id' => ['required', 'different:to_branch_id', Rule::exists('branches', 'id')->where('company_id', $companyId)],
+            'to_branch_id' => ['required', Rule::exists('branches', 'id')->where('company_id', $companyId)],
             'transfer_date' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_variant_color_id' => ['required', 'exists:product_variant_colors,id'],
+            'items.*.product_variant_color_id' => ['required', Rule::exists('product_variant_colors', 'id')->where('company_id', $companyId)],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'items.*.imei_unit_id' => ['nullable', 'exists:imei_units,id'],
+            'items.*.imei_unit_id' => ['nullable', Rule::exists('imei_units', 'id')->where('company_id', $companyId)],
         ], [
             'from_branch_id.different' => 'The source and destination branch must be different.',
         ]);

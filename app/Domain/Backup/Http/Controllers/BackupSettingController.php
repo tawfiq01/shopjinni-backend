@@ -76,7 +76,7 @@ class BackupSettingController extends Controller
         return response()->json(['message' => 'Backup settings saved.']);
     }
 
-    public function runNow()
+    public function runNow(Request $request)
     {
         $setting = BackupSetting::current();
 
@@ -84,7 +84,12 @@ class BackupSettingController extends Controller
             return response()->json(['message' => 'Connect Google Drive before running a backup.'], 422);
         }
 
-        $log = $this->backup->run('manual');
+        $allCompanies = $request->boolean('all_companies');
+        if ($allCompanies && ! $request->user()->is_super_admin) {
+            return response()->json(['message' => 'Only a super admin can back up every shop at once.'], 403);
+        }
+
+        $log = $this->backup->run('manual', $allCompanies ? null : $request->user()->company_id);
 
         if ($log->status === 'failed') {
             return response()->json(['message' => $log->message], 422);

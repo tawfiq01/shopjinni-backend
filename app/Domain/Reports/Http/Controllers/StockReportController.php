@@ -10,6 +10,7 @@ use App\Domain\Inventory\Models\StockMovement;
 use App\Domain\Purchasing\Models\PurchaseItem;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class StockReportController extends Controller
 {
@@ -158,7 +159,9 @@ class StockReportController extends Controller
 
     public function movements(Request $request)
     {
-        $request->validate(['sku_id' => ['required', 'integer', 'exists:product_variant_colors,id']]);
+        $companyId = $request->user()->company_id;
+
+        $request->validate(['sku_id' => ['required', 'integer', Rule::exists('product_variant_colors', 'id')->where('company_id', $companyId)]]);
         $canViewCost = $request->user()->can('reports.view-cost');
 
         $sku = ProductVariantColor::with(['variant.model.brand', 'color'])->findOrFail($request->integer('sku_id'));

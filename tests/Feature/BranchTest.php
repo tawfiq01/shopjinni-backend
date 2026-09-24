@@ -3,10 +3,10 @@
 namespace Tests\Feature;
 
 use App\Domain\Branches\Models\Branch;
+use App\Domain\Companies\Models\Company;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class BranchTest extends TestCase
@@ -16,11 +16,10 @@ class BranchTest extends TestCase
     private function actingAsAdmin(): User
     {
         Permission::firstOrCreate(['name' => 'branches.manage', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo('branches.manage');
 
-        $user = User::factory()->create();
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['branches.manage']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -46,9 +45,11 @@ class BranchTest extends TestCase
 
     public function test_any_authenticated_user_can_list_branches(): void
     {
-        Branch::factory()->create(['name' => 'Dhaka HQ', 'is_main' => true]);
-        $user = User::factory()->create();
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
         $this->actingAs($user, 'sanctum');
+
+        Branch::factory()->create(['name' => 'Dhaka HQ', 'is_main' => true]);
 
         $this->getJson('/api/branches')->assertOk()->assertJsonCount(1, 'data');
     }

@@ -2,10 +2,13 @@
 
 namespace App\Domain\Backup\Models;
 
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 class BackupSetting extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'google_access_token',
         'google_refresh_token',
@@ -34,8 +37,12 @@ class BackupSetting extends Model
     }
 
     /**
-     * There is only ever one row (id=1) — the whole app configures a single
-     * Google Drive destination and a single daily backup time.
+     * One row per company (was a single global row before multi-tenancy —
+     * every shop configures its own Drive destination and backup time).
+     * The empty search array is deliberate: BelongsToCompany's global
+     * scope already restricts the lookup to the current company, so this
+     * finds that company's row if one exists, or creates it against the
+     * current company if not.
      */
     public static function current(): self
     {
@@ -43,7 +50,7 @@ class BackupSetting extends Model
         // (only the DB column default applies) unless it's set explicitly
         // here — same class of bug as an uncast boolean column elsewhere
         // in this app.
-        return static::firstOrCreate(['id' => 1], ['is_enabled' => false]);
+        return static::firstOrCreate([], ['is_enabled' => false]);
     }
 
     public function isGoogleConnected(): bool

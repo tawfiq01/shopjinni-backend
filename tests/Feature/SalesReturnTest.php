@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\ProductModel;
 use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Inventory\Models\ImeiUnit;
 use App\Domain\Inventory\Models\InventoryStock;
@@ -18,7 +19,6 @@ use Database\Seeders\ChartOfAccountSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SalesReturnTest extends TestCase
@@ -29,9 +29,14 @@ class SalesReturnTest extends TestCase
 
     private function bootLedger(): void
     {
+        // Seeded (and the branch created) only now, after actingAs() —
+        // every one of these belongs to a tenant model, whose
+        // BelongsToCompany scope resolves the company from the now-
+        // authenticated user.
         $this->seed(ChartOfAccountSeeder::class);
         $this->seed(PaymentMethodSeeder::class);
         $this->branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['is_main' => true]);
+        auth()->user()->update(['branch_id' => $this->branch->id]);
     }
 
     private function actingAsAdmin(): User
@@ -39,11 +44,9 @@ class SalesReturnTest extends TestCase
         foreach (['pos.sell', 'purchases.manage'] as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo(['pos.sell', 'purchases.manage']);
-
-        $user = User::factory()->create(['branch_id' => $this->branch->id]);
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['pos.sell', 'purchases.manage']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -83,8 +86,8 @@ class SalesReturnTest extends TestCase
 
     public function test_restocked_quantity_return_reverses_revenue_and_cogs_and_bumps_stock(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
         $cash = PaymentMethod::where('name', 'Cash')->firstOrFail();
@@ -120,8 +123,8 @@ class SalesReturnTest extends TestCase
 
     public function test_damaged_return_does_not_restock_or_reverse_cogs(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
         $cash = PaymentMethod::where('name', 'Cash')->firstOrFail();
@@ -150,8 +153,8 @@ class SalesReturnTest extends TestCase
 
     public function test_imei_return_restocks_the_exact_unit_and_makes_it_sellable_again(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->imeiSku();
         $this->purchase($sku, 1, 24000, [['imei1' => '555555555555555']]);
         $unit = ImeiUnit::where('imei1', '555555555555555')->firstOrFail();
@@ -184,8 +187,8 @@ class SalesReturnTest extends TestCase
 
     public function test_cannot_return_more_than_was_sold(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
         $cash = PaymentMethod::where('name', 'Cash')->firstOrFail();
@@ -208,8 +211,8 @@ class SalesReturnTest extends TestCase
 
     public function test_walk_in_sale_return_without_refund_method_is_rejected(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
         $cash = PaymentMethod::where('name', 'Cash')->firstOrFail();
@@ -231,8 +234,8 @@ class SalesReturnTest extends TestCase
 
     public function test_due_sale_return_credited_to_customer_account_reduces_their_balance(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
         $customer = Customer::factory()->create();

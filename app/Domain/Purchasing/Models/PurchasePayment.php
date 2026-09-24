@@ -3,13 +3,14 @@
 namespace App\Domain\Purchasing\Models;
 
 use App\Domain\Accounting\Models\PaymentMethod;
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PurchasePayment extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToCompany;
 
     protected $fillable = [
         'purchase_invoice_id',

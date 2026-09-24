@@ -5,13 +5,14 @@ namespace App\Domain\Sales\Models;
 use App\Domain\Catalog\Models\ProductVariantColor;
 use App\Domain\Inventory\Models\ImeiUnit;
 use App\Domain\Purchasing\Models\PurchaseItem;
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SaleItem extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToCompany;
 
     protected $fillable = [
         'sales_invoice_id',

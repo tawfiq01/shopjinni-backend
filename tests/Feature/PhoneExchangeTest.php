@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\ProductModel;
 use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Inventory\Models\ImeiUnit;
 use App\Domain\Purchasing\Models\Distributor;
@@ -17,7 +18,6 @@ use Database\Seeders\ChartOfAccountSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class PhoneExchangeTest extends TestCase
@@ -28,19 +28,22 @@ class PhoneExchangeTest extends TestCase
 
     private function actingAsAdmin(): User
     {
-        $this->seed(ChartOfAccountSeeder::class);
-        $this->seed(PaymentMethodSeeder::class);
-        $this->branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['is_main' => true]);
-
         foreach (['pos.sell', 'purchases.manage'] as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo(['pos.sell', 'purchases.manage']);
-
-        $user = User::factory()->create(['branch_id' => $this->branch->id]);
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['pos.sell', 'purchases.manage']);
         $this->actingAs($user, 'sanctum');
+
+        // Seeded (and the branch created) only now, after actingAs() —
+        // every one of these belongs to a tenant model, whose
+        // BelongsToCompany scope resolves the company from the now-
+        // authenticated user.
+        $this->seed(ChartOfAccountSeeder::class);
+        $this->seed(PaymentMethodSeeder::class);
+        $this->branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['is_main' => true]);
+        $user->update(['branch_id' => $this->branch->id]);
 
         return $user;
     }

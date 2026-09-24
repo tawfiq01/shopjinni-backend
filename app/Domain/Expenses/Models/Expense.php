@@ -4,6 +4,7 @@ namespace App\Domain\Expenses\Models;
 
 use App\Domain\Accounting\Models\ChartOfAccount;
 use App\Domain\Branches\Models\Branch;
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Expense extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToCompany;
 
     protected $fillable = [
         'branch_id',

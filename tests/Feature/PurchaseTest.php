@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\ProductModel;
 use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Inventory\Models\ImeiUnit;
 use App\Domain\Inventory\Models\InventoryStock;
 use App\Domain\Purchasing\Models\Distributor;
@@ -18,7 +19,6 @@ use Database\Seeders\ChartOfAccountSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class PurchaseTest extends TestCase
@@ -27,18 +27,21 @@ class PurchaseTest extends TestCase
 
     private function actingAsPurchaser(): User
     {
+        Permission::firstOrCreate(['name' => 'purchases.manage', 'guard_name' => 'web']);
+
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['purchases.manage']);
+        $this->actingAs($user, 'sanctum');
+
+        // Seeded (and the branch created) only now, after actingAs() —
+        // every one of these belongs to a tenant model, whose
+        // BelongsToCompany scope resolves the company from the now-
+        // authenticated user.
         $this->seed(ChartOfAccountSeeder::class);
         $this->seed(PaymentMethodSeeder::class);
-
-        Permission::firstOrCreate(['name' => 'purchases.manage', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo('purchases.manage');
-
         $branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['is_main' => true]);
-
-        $user = User::factory()->create(['branch_id' => $branch->id]);
-        $user->assignRole($role);
-        $this->actingAs($user, 'sanctum');
+        $user->update(['branch_id' => $branch->id]);
 
         return $user;
     }

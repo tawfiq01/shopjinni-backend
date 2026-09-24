@@ -3,12 +3,12 @@
 namespace Tests\Feature;
 
 use App\Domain\Accounting\Models\ChartOfAccount;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Purchasing\Models\Distributor;
 use App\Models\User;
 use Database\Seeders\ChartOfAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class DistributorTest extends TestCase
@@ -18,11 +18,10 @@ class DistributorTest extends TestCase
     private function actingAsAdmin(): User
     {
         Permission::firstOrCreate(['name' => 'distributors.manage', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo('distributors.manage');
 
-        $user = User::factory()->create();
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['distributors.manage']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -30,8 +29,8 @@ class DistributorTest extends TestCase
 
     public function test_creating_a_distributor_with_opening_balance_posts_a_balanced_entry(): void
     {
-        $this->seed(ChartOfAccountSeeder::class);
         $this->actingAsAdmin();
+        $this->seed(ChartOfAccountSeeder::class);
 
         $response = $this->postJson('/api/distributors', [
             'name' => 'ABC Mobile Distributors',
@@ -48,8 +47,8 @@ class DistributorTest extends TestCase
 
     public function test_distributor_with_zero_opening_balance_posts_no_entry(): void
     {
-        $this->seed(ChartOfAccountSeeder::class);
         $this->actingAsAdmin();
+        $this->seed(ChartOfAccountSeeder::class);
 
         $response = $this->postJson('/api/distributors', [
             'name' => 'No Balance Traders',
@@ -61,8 +60,8 @@ class DistributorTest extends TestCase
 
     public function test_distributor_cannot_be_deleted_once_it_has_ledger_history(): void
     {
-        $this->seed(ChartOfAccountSeeder::class);
         $this->actingAsAdmin();
+        $this->seed(ChartOfAccountSeeder::class);
 
         $id = $this->postJson('/api/distributors', [
             'name' => 'Has History Ltd',

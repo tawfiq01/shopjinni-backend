@@ -13,6 +13,7 @@ use App\Domain\Purchasing\Models\PurchaseReturnItem;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -25,14 +26,16 @@ class PurchaseReturnController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'purchase_invoice_id' => ['required', 'exists:purchase_invoices,id'],
+            'purchase_invoice_id' => ['required', Rule::exists('purchase_invoices', 'id')->where('company_id', $companyId)],
             'return_date' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.purchase_item_id' => ['required', 'exists:purchase_items,id'],
+            'items.*.purchase_item_id' => ['required', Rule::exists('purchase_items', 'id')->where('company_id', $companyId)],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'items.*.imei_unit_id' => ['nullable', 'exists:imei_units,id'],
+            'items.*.imei_unit_id' => ['nullable', Rule::exists('imei_units', 'id')->where('company_id', $companyId)],
         ]);
 
         $invoice = PurchaseInvoice::with('distributor')->findOrFail($data['purchase_invoice_id']);

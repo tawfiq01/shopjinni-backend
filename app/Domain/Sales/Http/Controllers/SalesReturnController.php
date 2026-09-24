@@ -13,6 +13,7 @@ use App\Domain\Sales\Models\SalesReturnItem;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -25,13 +26,15 @@ class SalesReturnController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'sales_invoice_id' => ['required', 'exists:sales_invoices,id'],
+            'sales_invoice_id' => ['required', Rule::exists('sales_invoices', 'id')->where('company_id', $companyId)],
             'return_date' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:255'],
-            'refund_method_id' => ['nullable', 'exists:payment_methods,id'],
+            'refund_method_id' => ['nullable', Rule::exists('payment_methods', 'id')->where('company_id', $companyId)],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.sale_item_id' => ['required', 'exists:sale_items,id'],
+            'items.*.sale_item_id' => ['required', Rule::exists('sale_items', 'id')->where('company_id', $companyId)],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.condition' => ['required', 'in:returned,damaged'],
             'items.*.restocked' => ['required', 'boolean'],

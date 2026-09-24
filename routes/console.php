@@ -15,3 +15,5 @@ Artisan::command('inspire', function () {
 // `php artisan schedule:run` every minute on whatever server this deploys
 // to — that part is outside the app and must be set up on the host.
 Schedule::command('backup:check-schedule')->everyMinute();
+
+Schedule::command('subscriptions:check-status')->daily();

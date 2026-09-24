@@ -7,10 +7,10 @@ use App\Domain\Catalog\Models\Color;
 use App\Domain\Catalog\Models\ProductModel;
 use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Companies\Models\Company;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class CatalogTest extends TestCase
@@ -20,11 +20,10 @@ class CatalogTest extends TestCase
     private function actingAsAdmin(): User
     {
         Permission::firstOrCreate(['name' => 'catalog.manage', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo('catalog.manage');
 
-        $user = User::factory()->create();
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['catalog.manage']);
 
         $this->actingAs($user, 'sanctum');
 
@@ -33,7 +32,8 @@ class CatalogTest extends TestCase
 
     private function actingAsPlainUser(): User
     {
-        $user = User::factory()->create();
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
         $this->actingAs($user, 'sanctum');
 
         return $user;

@@ -3,12 +3,13 @@
 namespace App\Domain\Customers\Models;
 
 use App\Domain\Accounting\Models\JournalLine;
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Customer extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToCompany;
 
     protected $fillable = [
         'name',

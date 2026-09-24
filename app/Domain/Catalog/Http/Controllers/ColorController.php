@@ -7,6 +7,7 @@ use App\Domain\Catalog\Models\Color;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ColorController extends Controller
 {
@@ -17,8 +18,10 @@ class ColorController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:colors,name'],
+            'name' => ['required', 'string', 'max:255', Rule::unique('colors', 'name')->where('company_id', $companyId)],
             'hex_code' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
@@ -29,8 +32,10 @@ class ColorController extends Controller
 
     public function update(Request $request, Color $color)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:colors,name,'.$color->id],
+            'name' => ['required', 'string', 'max:255', Rule::unique('colors', 'name')->where('company_id', $companyId)->ignore($color->id)],
             'hex_code' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 

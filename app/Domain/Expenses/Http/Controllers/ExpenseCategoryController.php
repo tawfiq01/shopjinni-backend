@@ -8,6 +8,7 @@ use App\Domain\Expenses\Models\ExpenseCategory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ExpenseCategoryController extends Controller
 {
@@ -18,8 +19,10 @@ class ExpenseCategoryController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:expense_categories,name'],
+            'name' => ['required', 'string', 'max:255', Rule::unique('expense_categories', 'name')->where('company_id', $companyId)],
         ]);
 
         $category = DB::transaction(function () use ($data) {

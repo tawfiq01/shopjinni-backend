@@ -4,11 +4,14 @@ namespace App\Domain\Inventory\Models;
 
 use App\Domain\Branches\Models\Branch;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InventoryStock extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = ['branch_id', 'product_variant_color_id', 'quantity', 'demo_quantity'];
 
     public function branch(): BelongsTo

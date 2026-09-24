@@ -3,13 +3,13 @@
 namespace Tests\Feature;
 
 use App\Domain\Accounting\Models\ChartOfAccount;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Expenses\Models\ExpenseCategory;
 use App\Models\User;
 use Database\Seeders\ChartOfAccountSeeder;
 use Database\Seeders\ExpenseCategorySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ExpenseTest extends TestCase
@@ -18,16 +18,17 @@ class ExpenseTest extends TestCase
 
     private function actingAsAccountant(): User
     {
+        Permission::firstOrCreate(['name' => 'expenses.manage', 'guard_name' => 'web']);
+
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Accountant', ['expenses.manage']);
+        $this->actingAs($user, 'sanctum');
+
+        // Seeded only now, after actingAs() — both ChartOfAccount and
+        // ExpenseCategory are tenant-scoped models.
         $this->seed(ChartOfAccountSeeder::class);
         $this->seed(ExpenseCategorySeeder::class);
-
-        Permission::firstOrCreate(['name' => 'expenses.manage', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Accountant', 'guard_name' => 'web']);
-        $role->givePermissionTo('expenses.manage');
-
-        $user = User::factory()->create();
-        $user->assignRole($role);
-        $this->actingAs($user, 'sanctum');
 
         return $user;
     }
@@ -74,11 +75,12 @@ class ExpenseTest extends TestCase
 
     public function test_expenses_manage_permission_is_required(): void
     {
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->actingAs($user, 'sanctum');
+
         $this->seed(ChartOfAccountSeeder::class);
         $this->seed(ExpenseCategorySeeder::class);
-
-        $user = User::factory()->create();
-        $this->actingAs($user, 'sanctum');
 
         $this->getJson('/api/expense-categories')->assertForbidden();
     }

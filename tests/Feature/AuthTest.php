@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Branches\Models\Branch;
+use App\Domain\Companies\Models\Company;
+use App\Domain\Companies\Support\CurrentCompany;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -14,12 +16,12 @@ class AuthTest extends TestCase
 
     public function test_user_can_login_with_correct_credentials(): void
     {
-        Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-
+        $company = $this->createCompany('Test Company');
         $user = User::factory()->create([
+            'company_id' => $company->id,
             'password' => Hash::make('secret123'),
         ]);
-        $user->assignRole('Admin');
+        $this->assignCompanyRole($company, $user, 'Admin');
 
         $response = $this->postJson('/api/auth/login', [
             'email' => $user->email,
@@ -30,6 +32,39 @@ class AuthTest extends TestCase
             ->assertJsonStructure(['token', 'user' => ['id', 'email', 'roles', 'permissions']])
             ->assertJsonPath('user.email', $user->email)
             ->assertJsonPath('user.roles.0', 'Admin');
+    }
+
+    /**
+     * Regression test: login() formats the response in the same request
+     * that issues the token, before Sanctum has anything to authenticate
+     * from — Auth::user() is still null at that point even though $user
+     * itself is correct. Branch/Company are both BelongsToCompany-scoped
+     * (they read Auth::user()), so without formatUser() explicitly
+     * forcing the scope to $user's own company, this silently came back
+     * null instead of the real branch name.
+     */
+    public function test_login_response_includes_the_users_branch_and_company_name(): void
+    {
+        $company = $this->createCompany('Branch Test Shop');
+
+        $branch = CurrentCompany::forceFor($company->id, fn () => Branch::create([
+            'name' => 'Main Branch', 'is_main' => true, 'is_active' => true,
+        ]));
+
+        $user = User::factory()->create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'password' => Hash::make('secret123'),
+        ]);
+        $this->assignCompanyRole($company, $user, 'Admin');
+
+        $response = $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'secret123',
+        ])->assertOk();
+
+        $this->assertSame('Main Branch', $response->json('user.branch_name'));
+        $this->assertSame('Branch Test Shop', $response->json('user.company_name'));
     }
 
     public function test_login_fails_with_wrong_password(): void

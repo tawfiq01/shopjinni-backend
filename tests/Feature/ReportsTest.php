@@ -7,6 +7,7 @@ use App\Domain\Catalog\Models\ProductModel;
 use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Purchasing\Models\Distributor;
 use App\Models\User;
@@ -14,7 +15,6 @@ use Database\Seeders\ChartOfAccountSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ReportsTest extends TestCase
@@ -23,11 +23,18 @@ class ReportsTest extends TestCase
 
     private Branch $branch;
 
+    private Company $company;
+
     private function bootLedger(): void
     {
+        // Seeded (and the branch created) only now, after actingAs() —
+        // every one of these belongs to a tenant model, whose
+        // BelongsToCompany scope resolves the company from the now-
+        // authenticated user.
         $this->seed(ChartOfAccountSeeder::class);
         $this->seed(PaymentMethodSeeder::class);
         $this->branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['is_main' => true]);
+        auth()->user()->update(['branch_id' => $this->branch->id]);
     }
 
     private function actingAsAdmin(): User
@@ -35,11 +42,9 @@ class ReportsTest extends TestCase
         foreach (['pos.sell', 'purchases.manage', 'reports.view', 'reports.view-cost', 'distributors.manage', 'customers.manage'] as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo(['pos.sell', 'purchases.manage', 'reports.view', 'reports.view-cost', 'distributors.manage', 'customers.manage']);
-
-        $user = User::factory()->create(['branch_id' => $this->branch->id]);
-        $user->assignRole($role);
+        $this->company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $this->company->id]);
+        $this->assignCompanyRole($this->company, $user, 'Admin', ['pos.sell', 'purchases.manage', 'reports.view', 'reports.view-cost', 'distributors.manage', 'customers.manage']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -50,11 +55,8 @@ class ReportsTest extends TestCase
         foreach (['pos.sell', 'reports.view'] as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
-        $role = Role::firstOrCreate(['name' => 'Salesperson', 'guard_name' => 'web']);
-        $role->givePermissionTo(['pos.sell', 'reports.view']);
-
-        $user = User::factory()->create(['branch_id' => $this->branch->id]);
-        $user->assignRole($role);
+        $user = User::factory()->create(['company_id' => $this->company->id, 'branch_id' => $this->branch->id]);
+        $this->assignCompanyRole($this->company, $user, 'Salesperson', ['pos.sell', 'reports.view']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -85,8 +87,8 @@ class ReportsTest extends TestCase
 
     public function test_dashboard_summary_aggregates_todays_sales_dues_and_low_stock(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku(); // reorder_level = 3
         $distributor = Distributor::factory()->create();
 
@@ -122,8 +124,8 @@ class ReportsTest extends TestCase
 
     public function test_stock_report_includes_product_type_and_searches_by_brand_and_color(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
 
         $type = ProductType::factory()->create(['name' => 'Accessory', 'imei_tracking_default' => false]);
         $brand = \App\Domain\Catalog\Models\Brand::factory()->create(['name' => 'SearchBrand']);
@@ -154,8 +156,8 @@ class ReportsTest extends TestCase
 
     public function test_stock_report_flags_low_stock(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku(); // reorder_level = 3
         $distributor = Distributor::factory()->create();
 
@@ -174,8 +176,8 @@ class ReportsTest extends TestCase
 
     public function test_stock_report_breaks_out_demo_unit_count(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->imeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -203,8 +205,8 @@ class ReportsTest extends TestCase
 
     public function test_stock_report_breaks_out_demo_quantity_for_non_imei_skus(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -228,8 +230,8 @@ class ReportsTest extends TestCase
 
     public function test_sales_report_summary_totals_and_hides_profit_from_salesperson(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -257,8 +259,8 @@ class ReportsTest extends TestCase
 
     public function test_sales_details_report_lists_line_items_and_hides_cost_from_salesperson(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -293,8 +295,8 @@ class ReportsTest extends TestCase
 
     public function test_sales_details_export_downloads_an_xlsx_workbook(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -319,8 +321,8 @@ class ReportsTest extends TestCase
 
     public function test_purchase_report_requires_cost_visibility_permission(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -339,8 +341,8 @@ class ReportsTest extends TestCase
 
     public function test_purchase_report_breaks_down_by_product_and_exposes_price_history(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributorA = Distributor::factory()->create(['name' => 'Distributor A']);
         $distributorB = Distributor::factory()->create(['name' => 'Distributor B']);
@@ -378,8 +380,8 @@ class ReportsTest extends TestCase
 
     public function test_due_report_lists_only_non_zero_balances(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
 
         $this->postJson('/api/customers', ['name' => 'Due Customer', 'mobile' => '017', 'opening_balance' => 1500])
             ->assertCreated();
@@ -396,8 +398,8 @@ class ReportsTest extends TestCase
 
     public function test_cash_position_reflects_payments(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
         $cash = \App\Domain\Accounting\Models\PaymentMethod::where('name', 'Cash')->firstOrFail();
@@ -417,8 +419,8 @@ class ReportsTest extends TestCase
 
     public function test_stock_report_includes_valuation_but_hides_it_from_salesperson(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -442,8 +444,8 @@ class ReportsTest extends TestCase
 
     public function test_stock_movements_report_lists_quantity_sku_ledger_and_hides_cost_from_salesperson(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -474,8 +476,8 @@ class ReportsTest extends TestCase
 
     public function test_stock_movements_report_rejects_imei_tracked_sku(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->imeiSku();
 
         $this->getJson("/api/reports/stock-movements?sku_id={$sku->id}")->assertStatus(422);
@@ -483,8 +485,8 @@ class ReportsTest extends TestCase
 
     public function test_sales_report_breaks_down_by_model_and_color(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -514,8 +516,8 @@ class ReportsTest extends TestCase
 
     public function test_sales_report_breaks_down_by_salesperson_and_customer(): void
     {
-        $this->bootLedger();
         $admin = $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -560,8 +562,8 @@ class ReportsTest extends TestCase
 
     public function test_imei_history_shows_full_lifecycle_and_hides_cost_from_salesperson(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->imeiSku();
         $distributor = Distributor::factory()->create();
 
@@ -602,8 +604,8 @@ class ReportsTest extends TestCase
 
     public function test_imei_history_returns_404_for_unknown_imei(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
 
         $this->getJson('/api/reports/imei-history?imei=999999999999999')->assertNotFound();
     }

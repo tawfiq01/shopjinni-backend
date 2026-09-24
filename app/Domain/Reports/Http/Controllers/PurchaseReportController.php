@@ -4,13 +4,17 @@ namespace App\Domain\Reports\Http\Controllers;
 
 use App\Domain\Purchasing\Models\PurchaseInvoice;
 use App\Domain\Purchasing\Models\PurchaseItem;
+use App\Domain\Subscriptions\Support\SubscriptionFeatureGate;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PurchaseReportController extends Controller
 {
     public function summary(Request $request)
     {
+        $this->requireAdvancedReports();
+
         $from = ($request->date('from') ?? now()->subDays(29))->startOfDay();
         $to = ($request->date('to') ?? now())->endOfDay();
 
@@ -68,7 +72,11 @@ class PurchaseReportController extends Controller
 
     public function priceHistory(Request $request)
     {
-        $request->validate(['sku_id' => ['required', 'integer', 'exists:product_variant_colors,id']]);
+        $this->requireAdvancedReports();
+
+        $companyId = $request->user()->company_id;
+
+        $request->validate(['sku_id' => ['required', 'integer', Rule::exists('product_variant_colors', 'id')->where('company_id', $companyId)]]);
 
         // Ordered oldest-to-newest batch creation (id order), the same
         // ordering FIFO consumption relies on — see InventoryService.
@@ -87,5 +95,16 @@ class PurchaseReportController extends Controller
             ]);
 
         return response()->json(['data' => $batches]);
+    }
+
+    /**
+     * Wholesale-cost reports demonstrate spec §8's feature-flag mechanism:
+     * Basic plans can't see them at all, Premium can.
+     */
+    private function requireAdvancedReports(): void
+    {
+        if (! SubscriptionFeatureGate::has('advanced_reports')) {
+            abort(403, 'Upgrade your plan to access cost/purchase reports.');
+        }
     }
 }

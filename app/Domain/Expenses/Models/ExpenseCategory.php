@@ -3,13 +3,14 @@
 namespace App\Domain\Expenses\Models;
 
 use App\Domain\Accounting\Models\ChartOfAccount;
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ExpenseCategory extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToCompany;
 
     protected $fillable = ['name', 'chart_of_account_id', 'is_active'];
 

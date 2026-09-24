@@ -17,6 +17,7 @@ use App\Domain\Sales\Models\SalesInvoice;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -45,19 +46,21 @@ class SalesInvoiceController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'customer_id' => ['nullable', 'exists:customers,id'],
-            'branch_id' => ['nullable', 'exists:branches,id'],
-            'invoice_number' => ['nullable', 'string', 'max:255', 'unique:sales_invoices,invoice_number'],
+            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $companyId)],
+            'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)],
+            'invoice_number' => ['nullable', 'string', 'max:255', Rule::unique('sales_invoices', 'invoice_number')->where('company_id', $companyId)],
             'sale_date' => ['required', 'date'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_variant_color_id' => ['required', 'exists:product_variant_colors,id'],
-            'items.*.imei_unit_id' => ['nullable', 'exists:imei_units,id'],
+            'items.*.product_variant_color_id' => ['required', Rule::exists('product_variant_colors', 'id')->where('company_id', $companyId)],
+            'items.*.imei_unit_id' => ['nullable', Rule::exists('imei_units', 'id')->where('company_id', $companyId)],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
             'payments' => ['nullable', 'array'],
-            'payments.*.payment_method_id' => ['required_with:payments', 'exists:payment_methods,id'],
+            'payments.*.payment_method_id' => ['required_with:payments', Rule::exists('payment_methods', 'id')->where('company_id', $companyId)],
             'payments.*.amount' => ['required_with:payments', 'numeric', 'min:0.01'],
             'payments.*.reference_no' => ['nullable', 'string', 'max:255'],
         ]);

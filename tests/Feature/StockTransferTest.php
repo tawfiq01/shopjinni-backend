@@ -7,6 +7,7 @@ use App\Domain\Catalog\Models\ProductModel;
 use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Inventory\Models\ImeiUnit;
 use App\Domain\Inventory\Models\InventoryStock;
 use App\Domain\Purchasing\Models\Distributor;
@@ -28,20 +29,23 @@ class StockTransferTest extends TestCase
 
     private function actingAsAdmin(): User
     {
+        foreach (['purchases.manage', 'stock.transfer'] as $perm) {
+            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
+        }
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['purchases.manage', 'stock.transfer']);
+        $this->actingAs($user, 'sanctum');
+
+        // Seeded (and the branches created) only now, after actingAs() —
+        // every one of these belongs to a tenant model, whose
+        // BelongsToCompany scope resolves the company from the now-
+        // authenticated user.
         $this->seed(ChartOfAccountSeeder::class);
         $this->seed(PaymentMethodSeeder::class);
         $this->mainBranch = Branch::firstOrCreate(['name' => 'Main Branch'], ['is_main' => true]);
         $this->secondBranch = Branch::factory()->create(['name' => 'Second Branch']);
-
-        foreach (['purchases.manage', 'stock.transfer'] as $perm) {
-            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
-        }
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo(['purchases.manage', 'stock.transfer']);
-
-        $user = User::factory()->create(['branch_id' => $this->mainBranch->id]);
-        $user->assignRole($role);
-        $this->actingAs($user, 'sanctum');
+        $user->update(['branch_id' => $this->mainBranch->id]);
 
         return $user;
     }

@@ -5,13 +5,14 @@ namespace App\Domain\Inventory\Models;
 use App\Domain\Branches\Models\Branch;
 use App\Domain\Catalog\Models\ProductVariantColor;
 use App\Domain\Purchasing\Models\PurchaseItem;
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ImeiUnit extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToCompany;
 
     public const STATUS_IN_STOCK = 'in_stock';
 

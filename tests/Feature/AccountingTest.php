@@ -4,12 +4,12 @@ namespace Tests\Feature;
 
 use App\Domain\Accounting\Models\ChartOfAccount;
 use App\Domain\Accounting\Services\AccountingService;
+use App\Domain\Companies\Models\Company;
 use App\Models\User;
 use Database\Seeders\ChartOfAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AccountingTest extends TestCase
@@ -25,11 +25,10 @@ class AccountingTest extends TestCase
     {
         Permission::firstOrCreate(['name' => 'accounting.manage', 'guard_name' => 'web']);
         Permission::firstOrCreate(['name' => 'accounting.view', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Accountant', 'guard_name' => 'web']);
-        $role->givePermissionTo(['accounting.manage', 'accounting.view']);
 
-        $user = User::factory()->create();
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Accountant', ['accounting.manage', 'accounting.view']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -37,6 +36,10 @@ class AccountingTest extends TestCase
 
     public function test_service_rejects_unbalanced_entries(): void
     {
+        // The service is called directly (no HTTP, no role needed) but
+        // still touches tenant-scoped ChartOfAccount rows, so an
+        // authenticated, company-attached user must exist first.
+        $this->actingAsAccountant();
         $this->seedCoreAccounts();
         $cash = ChartOfAccount::where('code', '1000')->firstOrFail();
         $sales = ChartOfAccount::where('code', '4000')->firstOrFail();
@@ -54,6 +57,7 @@ class AccountingTest extends TestCase
 
     public function test_service_posts_a_balanced_entry_and_updates_balances(): void
     {
+        $this->actingAsAccountant();
         $this->seedCoreAccounts();
         $cash = ChartOfAccount::where('code', '1000')->firstOrFail();
         $sales = ChartOfAccount::where('code', '4000')->firstOrFail();
@@ -72,9 +76,10 @@ class AccountingTest extends TestCase
 
     public function test_api_rejects_manual_entry_without_permission(): void
     {
-        $this->seedCoreAccounts();
-        $user = User::factory()->create();
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
         $this->actingAs($user, 'sanctum');
+        $this->seedCoreAccounts();
 
         $cash = ChartOfAccount::where('code', '1000')->firstOrFail();
         $sales = ChartOfAccount::where('code', '4000')->firstOrFail();
@@ -91,8 +96,8 @@ class AccountingTest extends TestCase
 
     public function test_api_posts_a_balanced_manual_entry(): void
     {
-        $this->seedCoreAccounts();
         $this->actingAsAccountant();
+        $this->seedCoreAccounts();
 
         $cash = ChartOfAccount::where('code', '1000')->firstOrFail();
         $equity = ChartOfAccount::where('code', '3100')->firstOrFail();
@@ -116,8 +121,8 @@ class AccountingTest extends TestCase
 
     public function test_api_rejects_unbalanced_manual_entry_with_422(): void
     {
-        $this->seedCoreAccounts();
         $this->actingAsAccountant();
+        $this->seedCoreAccounts();
 
         $cash = ChartOfAccount::where('code', '1000')->firstOrFail();
         $equity = ChartOfAccount::where('code', '3100')->firstOrFail();

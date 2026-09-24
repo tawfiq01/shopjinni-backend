@@ -3,10 +3,10 @@
 namespace Tests\Feature;
 
 use App\Domain\Branches\Models\Branch;
+use App\Domain\Companies\Models\Company;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class UserManagementTest extends TestCase
@@ -15,16 +15,15 @@ class UserManagementTest extends TestCase
 
     private function actingAsAdmin(): User
     {
-        foreach (['users.manage'] as $perm) {
-            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
-        }
-        Role::firstOrCreate(['name' => 'Salesperson', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'Accountant', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo('users.manage');
+        Permission::firstOrCreate(['name' => 'users.manage', 'guard_name' => 'web']);
 
-        $user = User::factory()->create();
-        $user->assignRole($role);
+        $company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $company->id]);
+        $this->assignCompanyRole($company, $user, 'Admin', ['users.manage']);
+        // Exist (selectable by the /api/users 'role' field under test)
+        // without being assigned to anyone yet.
+        $this->createCompanyRole($company, 'Salesperson');
+        $this->createCompanyRole($company, 'Accountant');
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -71,11 +70,14 @@ class UserManagementTest extends TestCase
 
     public function test_admin_can_deactivate_another_user_and_they_lose_access(): void
     {
-        $this->actingAsAdmin();
-        Role::firstOrCreate(['name' => 'Salesperson', 'guard_name' => 'web']);
+        $admin = $this->actingAsAdmin();
 
-        $staff = User::factory()->create();
-        $staff->assignRole('Salesperson');
+        // UserController::assertSameCompany() 404s any user whose
+        // company_id doesn't match the acting admin's — User has no
+        // BelongsToCompany scope to do this automatically, so the test
+        // must wire it up explicitly, same as everywhere else.
+        $staff = User::factory()->create(['company_id' => $admin->company_id]);
+        $this->assignCompanyRole(Company::find($admin->company_id), $staff, 'Salesperson');
 
         $this->putJson("/api/users/{$staff->id}", ['is_active' => false])->assertOk();
 
@@ -87,8 +89,8 @@ class UserManagementTest extends TestCase
 
     public function test_admin_can_reset_a_users_password(): void
     {
-        $this->actingAsAdmin();
-        $staff = User::factory()->create();
+        $admin = $this->actingAsAdmin();
+        $staff = User::factory()->create(['company_id' => $admin->company_id]);
 
         $this->postJson("/api/users/{$staff->id}/reset-password", ['password' => 'newpassword123'])
             ->assertOk();
@@ -104,6 +106,6 @@ class UserManagementTest extends TestCase
         $this->actingAsAdmin();
 
         $response = $this->getJson('/api/roles')->assertOk();
-        $this->assertTrue(collect($response->json('data'))->contains('Salesperson'));
+        $this->assertTrue(collect($response->json('data'))->pluck('name')->contains('Salesperson'));
     }
 }

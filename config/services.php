@@ -41,4 +41,23 @@ return [
         'redirect_uri' => env('GOOGLE_DRIVE_REDIRECT_URI'),
     ],
 
+    // Sign-in-with-Google (registration/login) — a separate redirect_uri
+    // from google_drive since the callback path differs, but defaults to
+    // the same Client ID/Secret so the existing Google Cloud OAuth client
+    // can be reused: just add GOOGLE_LOGIN_REDIRECT_URI as an additional
+    // authorized redirect URI on that same client, or set the LOGIN_*
+    // vars to a separate client if preferred.
+    'google_login' => [
+        'client_id' => env('GOOGLE_LOGIN_CLIENT_ID', env('GOOGLE_DRIVE_CLIENT_ID')),
+        'client_secret' => env('GOOGLE_LOGIN_CLIENT_SECRET', env('GOOGLE_DRIVE_CLIENT_SECRET')),
+        'redirect_uri' => env('GOOGLE_LOGIN_REDIRECT_URI'),
+    ],
+
+    // Where the Google sign-in callback hands the browser back to. Fixed
+    // (not caller-supplied) to avoid an open-redirect — update this per
+    // environment rather than accepting the target from the request.
+    'frontend' => [
+        'url' => env('FRONTEND_URL', 'http://localhost:5173'),
+    ],
+
 ];

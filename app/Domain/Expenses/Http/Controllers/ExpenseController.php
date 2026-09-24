@@ -10,6 +10,7 @@ use App\Domain\Expenses\Models\ExpenseCategory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ExpenseController extends Controller
 {
@@ -34,13 +35,15 @@ class ExpenseController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'expense_category_id' => ['required', 'exists:expense_categories,id'],
+            'expense_category_id' => ['required', Rule::exists('expense_categories', 'id')->where('company_id', $companyId)],
             'date' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0.01'],
-            'payment_account_id' => ['required', 'exists:chart_of_accounts,id'],
+            'payment_account_id' => ['required', Rule::exists('chart_of_accounts', 'id')->where('company_id', $companyId)],
             'description' => ['nullable', 'string', 'max:255'],
-            'branch_id' => ['nullable', 'exists:branches,id'],
+            'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)],
         ]);
 
         $branchId = $data['branch_id'] ?? $request->user()->branch_id ?? Branch::where('is_main', true)->value('id');

@@ -6,9 +6,11 @@ use App\Domain\Catalog\Http\Resources\ProductVariantColorResource;
 use App\Domain\Catalog\Models\Color;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Subscriptions\Support\SubscriptionLimitGuard;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -41,14 +43,16 @@ class ProductVariantColorController extends Controller
 
     public function store(Request $request, ProductVariant $variant)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
             'color_id' => [
                 'required',
-                'exists:colors,id',
-                Rule::unique('product_variant_colors', 'color_id')->where('product_variant_id', $variant->id),
+                Rule::exists('colors', 'id')->where('company_id', $companyId),
+                Rule::unique('product_variant_colors', 'color_id')->where('product_variant_id', $variant->id)->where('company_id', $companyId),
             ],
-            'sku' => ['nullable', 'string', 'max:255', 'unique:product_variant_colors,sku'],
-            'barcode' => ['nullable', 'string', 'max:255', 'unique:product_variant_colors,barcode'],
+            'sku' => ['nullable', 'string', 'max:255', Rule::unique('product_variant_colors', 'sku')->where('company_id', $companyId)],
+            'barcode' => ['nullable', 'string', 'max:255', Rule::unique('product_variant_colors', 'barcode')->where('company_id', $companyId)],
             'imei_tracking_enabled' => ['nullable', 'boolean'],
             'warranty_months' => ['nullable', 'integer', 'min:0'],
             'reorder_level' => ['nullable', 'integer', 'min:0'],
@@ -57,26 +61,32 @@ class ProductVariantColorController extends Controller
             'color_id.unique' => 'This variant already has a SKU for that color.',
         ]);
 
-        $sku = new ProductVariantColor($data);
-        $sku->product_variant_id = $variant->id;
-        $sku->is_active = true;
-        $sku->sku = $data['sku'] ?? $this->generateSku($variant, $data['color_id']);
+        return DB::transaction(function () use ($data, $variant, $companyId) {
+            SubscriptionLimitGuard::ensure($companyId, 'max_products', ProductVariantColor::count(), 'products');
 
-        try {
-            $sku->save();
-        } catch (QueryException) {
-            $sku->sku = $sku->sku.'-'.$variant->id.$data['color_id'];
-            $sku->save();
-        }
+            $sku = new ProductVariantColor($data);
+            $sku->product_variant_id = $variant->id;
+            $sku->is_active = true;
+            $sku->sku = $data['sku'] ?? $this->generateSku($variant, $data['color_id']);
 
-        return new ProductVariantColorResource($sku->load(['variant.model.brand', 'variant.model.productType', 'color']));
+            try {
+                $sku->save();
+            } catch (QueryException) {
+                $sku->sku = $sku->sku.'-'.$variant->id.$data['color_id'];
+                $sku->save();
+            }
+
+            return new ProductVariantColorResource($sku->load(['variant.model.brand', 'variant.model.productType', 'color']));
+        });
     }
 
     public function update(Request $request, ProductVariantColor $sku)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'sku' => ['sometimes', 'string', 'max:255', 'unique:product_variant_colors,sku,'.$sku->id],
-            'barcode' => ['nullable', 'string', 'max:255', 'unique:product_variant_colors,barcode,'.$sku->id],
+            'sku' => ['sometimes', 'string', 'max:255', Rule::unique('product_variant_colors', 'sku')->where('company_id', $companyId)->ignore($sku->id)],
+            'barcode' => ['nullable', 'string', 'max:255', Rule::unique('product_variant_colors', 'barcode')->where('company_id', $companyId)->ignore($sku->id)],
             'imei_tracking_enabled' => ['nullable', 'boolean'],
             'warranty_months' => ['nullable', 'integer', 'min:0'],
             'reorder_level' => ['nullable', 'integer', 'min:0'],

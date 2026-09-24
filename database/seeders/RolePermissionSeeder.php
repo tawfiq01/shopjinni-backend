@@ -2,52 +2,23 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Auth\Support\PermissionCatalog;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
+/**
+ * Permissions are global capability strings and stay unscoped — only
+ * Role is per-company now (see CompanyTeamResolver / config/permission.php).
+ * There's no more single global "Admin" role to seed here:
+ * CompanyProvisioningService creates each company's own Admin/Salesperson/
+ * Accountant roles from PermissionCatalog::DEFAULT_ROLE_PERMISSIONS.
+ */
 class RolePermissionSeeder extends Seeder
 {
     public function run(): void
     {
-        $permissions = [
-            'catalog.manage',
-            'distributors.manage',
-            'accounting.manage',
-            'accounting.view',
-            'purchases.manage',
-            'customers.manage',
-            'pos.sell',
-            'expenses.manage',
-            'reports.view',
-            'reports.view-cost',
-            'users.manage',
-            'branches.manage',
-            'stock.transfer',
-            'backup.manage',
-        ];
-
-        foreach ($permissions as $permission) {
+        foreach (PermissionCatalog::ALL as $permission) {
             Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
-
-        $admin = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $admin->syncPermissions($permissions);
-
-        $accountant = Role::firstOrCreate(['name' => 'Accountant', 'guard_name' => 'web']);
-        $accountant->syncPermissions([
-            'accounting.manage',
-            'accounting.view',
-            'expenses.manage',
-            'reports.view',
-            'reports.view-cost',
-        ]);
-
-        $salesperson = Role::firstOrCreate(['name' => 'Salesperson', 'guard_name' => 'web']);
-        $salesperson->syncPermissions([
-            'pos.sell',
-            'customers.manage',
-            'reports.view',
-        ]);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Domain\Backup\Services;
 
 use App\Domain\Backup\Models\BackupLog;
 use App\Domain\Backup\Models\BackupSetting;
+use App\Domain\Shared\Support\TenantModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
@@ -14,7 +15,14 @@ class BackupService
 {
     public function __construct(private readonly GoogleDriveService $drive) {}
 
-    public function run(string $trigger = 'manual'): BackupLog
+    /**
+     * $companyId: which company's data the dump is filtered to. Null means
+     * an unfiltered, whole-database dump (today's original behaviour,
+     * including every other company's data) — only ever reachable via the
+     * is_super_admin gate in BackupSettingController, never from the
+     * per-company scheduled check.
+     */
+    public function run(string $trigger, ?int $companyId): BackupLog
     {
         $setting = BackupSetting::current();
         $stamp = now()->format('Y-m-d_His');
@@ -27,7 +35,7 @@ class BackupService
         }
 
         try {
-            $this->dumpDatabase($sqlPath);
+            $this->dumpDatabase($sqlPath, $companyId);
             $this->zip($sqlPath, $zipPath);
 
             $uploaded = $this->drive->uploadFile($zipPath, basename($zipPath), $setting->drive_folder_id);
@@ -68,25 +76,61 @@ class BackupService
         }
     }
 
-    private function dumpDatabase(string $outputPath): void
+    private function dumpDatabase(string $outputPath, ?int $companyId): void
     {
         $connectionName = config('database.default');
         $config = config("database.connections.{$connectionName}");
+        $env = ['MYSQL_PWD' => $config['password']];
+        $base = [
+            config('backup.mysqldump_path'),
+            '--host='.$config['host'],
+            '--port='.$config['port'],
+            '--user='.$config['username'],
+            '--single-transaction',
+        ];
 
-        $result = Process::timeout(300)
-            ->env(['MYSQL_PWD' => $config['password']])
-            ->run([
-                config('backup.mysqldump_path'),
-                '--host='.$config['host'],
-                '--port='.$config['port'],
-                '--user='.$config['username'],
-                '--single-transaction',
+        if ($companyId === null) {
+            $result = Process::timeout(300)->env($env)->run([
+                ...$base,
                 '--result-file='.$outputPath,
                 $config['database'],
             ]);
 
-        if ($result->failed()) {
-            throw new RuntimeException('mysqldump failed: '.$result->errorOutput());
+            if ($result->failed()) {
+                throw new RuntimeException('mysqldump failed: '.$result->errorOutput());
+            }
+        } else {
+            // Schema for every table (structure only, no rows — nothing
+            // tenant-specific to filter), then data for only the tenant
+            // tables, filtered to this one company, appended after.
+            $schema = Process::timeout(300)->env($env)->run([
+                ...$base,
+                '--no-data',
+                '--result-file='.$outputPath,
+                $config['database'],
+            ]);
+
+            if ($schema->failed()) {
+                throw new RuntimeException('mysqldump (schema) failed: '.$schema->errorOutput());
+            }
+
+            $dataPath = $outputPath.'.data';
+            $data = Process::timeout(300)->env($env)->run([
+                ...$base,
+                '--no-create-info',
+                '--where=company_id='.$companyId,
+                '--result-file='.$dataPath,
+                $config['database'],
+                ...TenantModels::tables(),
+            ]);
+
+            if ($data->failed()) {
+                @unlink($dataPath);
+                throw new RuntimeException('mysqldump (data) failed: '.$data->errorOutput());
+            }
+
+            file_put_contents($outputPath, file_get_contents($dataPath), FILE_APPEND);
+            @unlink($dataPath);
         }
 
         if (! file_exists($outputPath) || filesize($outputPath) === 0) {

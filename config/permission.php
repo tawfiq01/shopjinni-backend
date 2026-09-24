@@ -1,6 +1,6 @@
 <?php
 
-use Spatie\Permission\DefaultTeamResolver;
+use App\Domain\Auth\Support\CompanyTeamResolver;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -148,12 +148,12 @@ return [
      * (view the latest version of this package's migration file)
      */
 
-    'teams' => false,
+    'teams' => true,
 
     /*
      * The class to use to resolve the permissions team id
      */
-    'team_resolver' => DefaultTeamResolver::class,
+    'team_resolver' => CompanyTeamResolver::class,
 
     /*
      * Passport Client Credentials Grant

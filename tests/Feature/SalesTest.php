@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\ProductModel;
 use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Models\ProductVariantColor;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Inventory\Models\ImeiUnit;
 use App\Domain\Purchasing\Models\Distributor;
@@ -17,7 +18,6 @@ use Database\Seeders\ChartOfAccountSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SalesTest extends TestCase
@@ -26,11 +26,18 @@ class SalesTest extends TestCase
 
     private Branch $branch;
 
+    private Company $company;
+
     private function bootLedger(): void
     {
+        // Seeded (and the branch created) only now, after actingAs() —
+        // every one of these belongs to a tenant model, whose
+        // BelongsToCompany scope resolves the company from the now-
+        // authenticated user.
         $this->seed(ChartOfAccountSeeder::class);
         $this->seed(PaymentMethodSeeder::class);
         $this->branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['is_main' => true]);
+        auth()->user()->update(['branch_id' => $this->branch->id]);
     }
 
     private function actingAsAdmin(): User
@@ -38,11 +45,9 @@ class SalesTest extends TestCase
         foreach (['pos.sell', 'purchases.manage', 'reports.view-cost'] as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
-        $role = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
-        $role->givePermissionTo(['pos.sell', 'purchases.manage', 'reports.view-cost']);
-
-        $user = User::factory()->create(['branch_id' => $this->branch->id]);
-        $user->assignRole($role);
+        $this->company = $this->createCompany('Test Company');
+        $user = User::factory()->create(['company_id' => $this->company->id]);
+        $this->assignCompanyRole($this->company, $user, 'Admin', ['pos.sell', 'purchases.manage', 'reports.view-cost']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -51,11 +56,9 @@ class SalesTest extends TestCase
     private function actingAsSalesperson(): User
     {
         Permission::firstOrCreate(['name' => 'pos.sell', 'guard_name' => 'web']);
-        $role = Role::firstOrCreate(['name' => 'Salesperson', 'guard_name' => 'web']);
-        $role->givePermissionTo('pos.sell');
 
-        $user = User::factory()->create(['branch_id' => $this->branch->id]);
-        $user->assignRole($role);
+        $user = User::factory()->create(['company_id' => $this->company->id, 'branch_id' => $this->branch->id]);
+        $this->assignCompanyRole($this->company, $user, 'Salesperson', ['pos.sell']);
         $this->actingAs($user, 'sanctum');
 
         return $user;
@@ -100,8 +103,8 @@ class SalesTest extends TestCase
 
     public function test_selling_a_quantity_sku_reduces_stock_and_posts_balanced_accounting_with_correct_profit(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500); // cost 500 each
 
@@ -135,8 +138,8 @@ class SalesTest extends TestCase
 
     public function test_fifo_uses_oldest_batch_cost_first(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 2, 500); // batch 1: 2 units @ 500
         $this->purchase($sku, 2, 600); // batch 2: 2 units @ 600
@@ -157,8 +160,8 @@ class SalesTest extends TestCase
 
     public function test_selling_an_imei_unit_marks_it_sold_and_prevents_reselling(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->imeiSku();
         $this->purchase($sku, 1, 24000, [['imei1' => '999999999999999']]);
 
@@ -193,8 +196,8 @@ class SalesTest extends TestCase
 
     public function test_imei_tracked_item_rejects_quantity_greater_than_one(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->imeiSku();
         $this->purchase($sku, 2, 24000, [['imei1' => '111111111111111'], ['imei1' => '222222222222222']]);
         $unit = ImeiUnit::where('imei1', '111111111111111')->firstOrFail();
@@ -212,8 +215,8 @@ class SalesTest extends TestCase
 
     public function test_due_sale_requires_a_customer(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
 
@@ -225,8 +228,8 @@ class SalesTest extends TestCase
 
     public function test_due_sale_with_customer_updates_their_balance(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
         $customer = Customer::factory()->create();
@@ -242,8 +245,8 @@ class SalesTest extends TestCase
 
     public function test_overpayment_is_rejected(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
         $cash = PaymentMethod::where('name', 'Cash')->firstOrFail();
@@ -257,8 +260,8 @@ class SalesTest extends TestCase
 
     public function test_insufficient_stock_is_rejected(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 2, 500);
 
@@ -270,8 +273,8 @@ class SalesTest extends TestCase
 
     public function test_salesperson_response_hides_cost_and_profit(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
         $this->purchase($sku, 5, 500);
 
@@ -291,8 +294,8 @@ class SalesTest extends TestCase
 
     public function test_pos_search_surfaces_demo_quantity_for_non_imei_skus(): void
     {
-        $this->bootLedger();
         $this->actingAsAdmin();
+        $this->bootLedger();
         $sku = $this->nonImeiSku();
 
         $distributor = Distributor::factory()->create();

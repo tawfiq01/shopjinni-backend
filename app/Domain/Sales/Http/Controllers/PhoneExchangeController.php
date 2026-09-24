@@ -20,6 +20,7 @@ use App\Domain\Sales\Models\SalesInvoice;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -32,22 +33,24 @@ class PhoneExchangeController extends Controller
 
     public function store(Request $request)
     {
+        $companyId = $request->user()->company_id;
+
         $data = $request->validate([
-            'customer_id' => ['nullable', 'exists:customers,id'],
+            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'exchange_date' => ['required', 'date'],
-            'old_phone.product_variant_color_id' => ['required', 'exists:product_variant_colors,id'],
+            'old_phone.product_variant_color_id' => ['required', Rule::exists('product_variant_colors', 'id')->where('company_id', $companyId)],
             'old_phone.exchange_value' => ['required', 'numeric', 'min:0'],
             'old_phone.imei1' => ['nullable', 'string', 'max:32'],
             'old_phone.imei2' => ['nullable', 'string', 'max:32'],
             'old_phone.serial_number' => ['nullable', 'string', 'max:64'],
             'old_phone.warranty_months' => ['nullable', 'integer', 'min:0'],
-            'new_phone.product_variant_color_id' => ['required', 'exists:product_variant_colors,id'],
-            'new_phone.imei_unit_id' => ['nullable', 'exists:imei_units,id'],
+            'new_phone.product_variant_color_id' => ['required', Rule::exists('product_variant_colors', 'id')->where('company_id', $companyId)],
+            'new_phone.imei_unit_id' => ['nullable', Rule::exists('imei_units', 'id')->where('company_id', $companyId)],
             'new_phone.unit_price' => ['required', 'numeric', 'min:0'],
             'payments' => ['nullable', 'array'],
-            'payments.*.payment_method_id' => ['required_with:payments', 'exists:payment_methods,id'],
+            'payments.*.payment_method_id' => ['required_with:payments', Rule::exists('payment_methods', 'id')->where('company_id', $companyId)],
             'payments.*.amount' => ['required_with:payments', 'numeric', 'min:0.01'],
-            'refund_method_id' => ['nullable', 'exists:payment_methods,id'],
+            'refund_method_id' => ['nullable', Rule::exists('payment_methods', 'id')->where('company_id', $companyId)],
         ]);
 
         $branchId = $request->user()->branch_id ?? Branch::where('is_main', true)->value('id');

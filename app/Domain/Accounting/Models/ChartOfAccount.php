@@ -2,6 +2,7 @@
 
 namespace App\Domain\Accounting\Models;
 
+use App\Domain\Shared\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ChartOfAccount extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToCompany;
 
     public const TYPE_ASSET = 'asset';
 
