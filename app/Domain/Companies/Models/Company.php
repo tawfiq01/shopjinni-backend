@@ -14,12 +14,16 @@ class Company extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'address', 'phone', 'logo_path', 'is_active'];
+    protected $fillable = [
+        'name', 'owner_name', 'address', 'district', 'country', 'currency', 'timezone',
+        'phone', 'logo_path', 'is_active',
+    ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'setup_wizard_completed_at' => 'datetime',
         ];
     }
 

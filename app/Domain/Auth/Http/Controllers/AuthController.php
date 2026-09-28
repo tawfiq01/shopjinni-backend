@@ -10,6 +10,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -225,6 +227,82 @@ class AuthController extends Controller
         return response()->json(['message' => 'Password updated.']);
     }
 
+    /**
+     * Self-service: any authenticated user can edit their own name/phone/
+     * email — deliberately no permission gate, unlike UserController
+     * (which is how an Admin edits SOMEONE ELSE's account).
+     */
+    public function updateProfile(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email,'.$request->user()->id],
+        ]);
+
+        $request->user()->update($data);
+
+        return response()->json(['user' => $this->formatUser($request->user()->fresh())]);
+    }
+
+    public function uploadAvatar(Request $request)
+    {
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $user = $request->user();
+
+        if ($user->avatar_path) {
+            Storage::disk('public')->delete($user->avatar_path);
+        }
+
+        $path = $request->file('avatar')->storeAs(
+            'avatars',
+            $user->id.'-'.Str::random(8).'.'.$request->file('avatar')->extension(),
+            'public',
+        );
+
+        $user->update(['avatar_path' => $path]);
+
+        return response()->json(['user' => $this->formatUser($user->fresh())]);
+    }
+
+    public function deleteAvatar(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->avatar_path) {
+            Storage::disk('public')->delete($user->avatar_path);
+            $user->update(['avatar_path' => null]);
+        }
+
+        return response()->json(['user' => $this->formatUser($user->fresh())]);
+    }
+
+    /**
+     * Public (no auth:sanctum) — same reasoning as CompanyController::
+     * logoImage(): a Flutter Web <img>/NetworkImage load can't attach an
+     * Authorization header, the filename is already an unguessable
+     * {user_id}-{random8}.{ext} token, and this has to be a real Laravel
+     * route (not the raw /storage/* symlink) so the CORS header below
+     * actually applies — PHP's built-in dev server serves an existing
+     * static file directly, bypassing the framework entirely otherwise.
+     */
+    public function avatarImage(string $filename)
+    {
+        $path = 'avatars/'.basename($filename);
+
+        if (! Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        return response(Storage::disk('public')->get($path))
+            ->header('Content-Type', Storage::disk('public')->mimeType($path))
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Cache-Control', 'public, max-age=86400');
+    }
+
     private function formatUser(User $user): array
     {
         // Branch/Company (BelongsToCompany-scoped) and roles/permissions
@@ -252,6 +330,17 @@ class AuthController extends Controller
                 'branch_name' => $user->branch?->name,
                 'company_id' => $user->company_id,
                 'company_name' => $user->company?->name,
+                'company_logo_url' => $user->company?->logo_path
+                    ? request()->getSchemeAndHttpHost().'/api/logo/'.basename($user->company->logo_path)
+                    : null,
+                'setup_wizard_completed' => $user->company?->setup_wizard_completed_at !== null,
+                // Built from the actual incoming request host, same
+                // reasoning as CompanyController::formatted()'s logo_url —
+                // the app is reachable at more than one host (localhost,
+                // LAN IP), and a static APP_URL would only work for one.
+                'avatar_url' => $user->avatar_path
+                    ? request()->getSchemeAndHttpHost().'/api/avatars/'.basename($user->avatar_path)
+                    : null,
                 'is_super_admin' => $user->is_super_admin,
                 'roles' => $user->getRoleNames(),
                 'permissions' => $user->getAllPermissions()->pluck('name'),

@@ -7,7 +7,9 @@ use App\Domain\Companies\Models\Company;
 use App\Domain\Companies\Support\CurrentCompany;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -168,5 +170,98 @@ class AuthTest extends TestCase
             'new_password' => 'newpassword456',
             'new_password_confirmation' => 'doesnotmatch',
         ])->assertUnprocessable();
+    }
+
+    public function test_user_can_update_their_own_profile(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user, 'sanctum');
+
+        $response = $this->putJson('/api/auth/profile', [
+            'name' => 'Updated Name',
+            'phone' => '01711111111',
+            'email' => 'updated@example.com',
+        ])->assertOk();
+
+        $response->assertJsonPath('user.name', 'Updated Name')
+            ->assertJsonPath('user.phone', '01711111111')
+            ->assertJsonPath('user.email', 'updated@example.com');
+        $this->assertSame('updated@example.com', $user->fresh()->email);
+    }
+
+    public function test_updating_profile_without_changing_email_is_allowed(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user, 'sanctum');
+
+        $this->putJson('/api/auth/profile', [
+            'name' => 'Same Email Update',
+            'email' => $user->email,
+        ])->assertOk()->assertJsonPath('user.name', 'Same Email Update');
+    }
+
+    public function test_updating_profile_rejects_an_email_already_used_by_another_account(): void
+    {
+        $other = User::factory()->create(['email' => 'taken@example.com']);
+        $user = User::factory()->create();
+        $this->actingAs($user, 'sanctum');
+
+        $this->putJson('/api/auth/profile', [
+            'name' => $user->name,
+            'email' => 'taken@example.com',
+        ])->assertUnprocessable();
+    }
+
+    public function test_user_can_upload_and_remove_their_own_avatar(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $this->actingAs($user, 'sanctum');
+
+        $file = UploadedFile::fake()->image('avatar.png', 200, 200);
+        $response = $this->postJson('/api/auth/profile/avatar', ['avatar' => $file])->assertOk();
+
+        $avatarUrl = $response->json('user.avatar_url');
+        $this->assertNotNull($avatarUrl);
+        $this->assertStringContainsString('/api/avatars/', $avatarUrl);
+        Storage::disk('public')->assertExists($user->fresh()->avatar_path);
+
+        $this->deleteJson('/api/auth/profile/avatar')
+            ->assertOk()->assertJsonPath('user.avatar_url', null);
+        $this->assertNull($user->fresh()->avatar_path);
+    }
+
+    /** Same reasoning as CompanyTest's equivalent logo test — see AuthController::avatarImage()'s docblock. */
+    public function test_avatar_image_is_served_publicly_with_a_cors_header(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $this->actingAs($user, 'sanctum');
+
+        $file = UploadedFile::fake()->image('avatar.png', 200, 200);
+        $avatarUrl = $this->postJson('/api/auth/profile/avatar', ['avatar' => $file])
+            ->assertOk()->json('user.avatar_url');
+        $filename = basename($avatarUrl);
+
+        $response = $this->get("/api/avatars/{$filename}");
+
+        $response->assertOk();
+        $response->assertHeader('Access-Control-Allow-Origin', '*');
+        $this->assertStringStartsWith('image/', $response->headers->get('Content-Type'));
+    }
+
+    public function test_avatar_image_404s_for_an_unknown_filename(): void
+    {
+        $this->get('/api/avatars/does-not-exist.png')->assertNotFound();
+    }
+
+    public function test_a_non_image_file_is_rejected_as_an_avatar(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $this->actingAs($user, 'sanctum');
+
+        $file = UploadedFile::fake()->create('not-an-image.pdf', 100);
+        $this->postJson('/api/auth/profile/avatar', ['avatar' => $file])->assertUnprocessable();
     }
 }

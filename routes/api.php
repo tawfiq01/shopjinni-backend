@@ -53,6 +53,7 @@ Route::get('/auth/google/callback', [AuthController::class, 'googleCallback']);
 // CORS headers apply for the app's cross-origin (different port) fetch —
 // see CompanyController::logoImage()'s docblock.
 Route::get('/logo/{filename}', [CompanyController::class, 'logoImage']);
+Route::get('/avatars/{filename}', [AuthController::class, 'avatarImage']);
 
 // EnsureSubscriptionActive is applied to the WHOLE group (not opted in
 // per feature) — the app's own tenant-isolation design is fail-closed by
@@ -64,6 +65,9 @@ Route::middleware(['auth:sanctum', 'subscription.active'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/profile/avatar', [AuthController::class, 'uploadAvatar']);
+    Route::delete('/auth/profile/avatar', [AuthController::class, 'deleteAvatar']);
     Route::post('/auth/onboarding/complete', [AuthController::class, 'completeOnboarding']);
 
     // Readable by any authenticated user (the shop name/logo shows up in the app chrome for everyone).
@@ -72,6 +76,7 @@ Route::middleware(['auth:sanctum', 'subscription.active'])->group(function () {
         Route::put('/company', [CompanyController::class, 'update']);
         Route::post('/company/logo', [CompanyController::class, 'uploadLogo']);
         Route::delete('/company/logo', [CompanyController::class, 'deleteLogo']);
+        Route::post('/company/setup-wizard/complete', [CompanyController::class, 'completeSetupWizard']);
     });
 
     // Billing — readable by any authenticated user (dashboard banner needs it too).

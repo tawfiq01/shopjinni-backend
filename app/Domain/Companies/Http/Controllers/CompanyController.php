@@ -18,12 +18,30 @@ class CompanyController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'owner_name' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
+            'district' => ['nullable', 'string', 'max:255'],
+            'country' => ['nullable', 'string', 'max:255'],
+            'currency' => ['nullable', 'string', 'max:10'],
+            'timezone' => ['nullable', 'string', 'max:64'],
             'phone' => ['nullable', 'string', 'max:255'],
         ]);
 
         $company = $request->user()->company;
         $company->update($data);
+
+        return $this->formatted($company, $request);
+    }
+
+    public function completeSetupWizard(Request $request)
+    {
+        $company = $request->user()->company;
+        // Deliberately not in $fillable (a mass-updatable timestamp a
+        // future generic "update company" call could accidentally reset
+        // is worse than one extra explicit assignment here) — set and
+        // saved directly instead of via update().
+        $company->setup_wizard_completed_at = now();
+        $company->save();
 
         return $this->formatted($company, $request);
     }
@@ -94,8 +112,14 @@ class CompanyController extends Controller
         return [
             'id' => $company->id,
             'name' => $company->name,
+            'owner_name' => $company->owner_name,
             'address' => $company->address,
+            'district' => $company->district,
+            'country' => $company->country,
+            'currency' => $company->currency,
+            'timezone' => $company->timezone,
             'phone' => $company->phone,
+            'setup_wizard_completed' => $company->setup_wizard_completed_at !== null,
             // Built from the actual incoming request host rather than the
             // static APP_URL config — the app is reachable at more than
             // one host (localhost for the dev machine itself, its LAN IP

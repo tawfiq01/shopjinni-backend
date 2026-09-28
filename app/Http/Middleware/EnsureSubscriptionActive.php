@@ -24,6 +24,7 @@ class EnsureSubscriptionActive
         'api/auth/*',
         'api/company',
         'api/company/subscription*',
+        'api/company/setup-wizard*',
         'api/subscription/plans',
         'api/logo/*',
         'api/admin/*',

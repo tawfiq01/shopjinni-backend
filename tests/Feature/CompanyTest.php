@@ -66,6 +66,63 @@ class CompanyTest extends TestCase
         $this->assertSame('Renamed Shop', Company::first()->name);
     }
 
+    public function test_admin_can_update_the_extended_profile_fields(): void
+    {
+        $this->actingAsAdmin();
+
+        $response = $this->putJson('/api/company', [
+            'name' => 'Test Company',
+            'owner_name' => 'Karim Uddin',
+            'district' => 'Dhaka',
+            'country' => 'Bangladesh',
+            'currency' => 'BDT',
+            'timezone' => 'Asia/Dhaka',
+        ])->assertOk();
+
+        $response->assertJsonPath('owner_name', 'Karim Uddin')
+            ->assertJsonPath('district', 'Dhaka')
+            ->assertJsonPath('country', 'Bangladesh')
+            ->assertJsonPath('currency', 'BDT')
+            ->assertJsonPath('timezone', 'Asia/Dhaka');
+    }
+
+    public function test_a_fresh_test_company_has_not_completed_the_setup_wizard(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->getJson('/api/company')->assertOk()->assertJsonPath('setup_wizard_completed', false);
+    }
+
+    public function test_admin_can_mark_the_setup_wizard_complete(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->postJson('/api/company/setup-wizard/complete')
+            ->assertOk()->assertJsonPath('setup_wizard_completed', true);
+
+        $this->getJson('/api/company')->assertOk()->assertJsonPath('setup_wizard_completed', true);
+    }
+
+    public function test_non_admin_cannot_mark_the_setup_wizard_complete(): void
+    {
+        $this->actingAsSalesperson();
+
+        $this->postJson('/api/company/setup-wizard/complete')->assertForbidden();
+    }
+
+    public function test_login_response_reflects_setup_wizard_completion(): void
+    {
+        $admin = $this->actingAsAdmin();
+
+        $this->postJson('/api/auth/login', ['email' => $admin->email, 'password' => 'password'])
+            ->assertOk()->assertJsonPath('user.setup_wizard_completed', false);
+
+        $this->postJson('/api/company/setup-wizard/complete')->assertOk();
+
+        $this->postJson('/api/auth/login', ['email' => $admin->email, 'password' => 'password'])
+            ->assertOk()->assertJsonPath('user.setup_wizard_completed', true);
+    }
+
     public function test_admin_can_upload_and_remove_a_logo(): void
     {
         Storage::fake('public');

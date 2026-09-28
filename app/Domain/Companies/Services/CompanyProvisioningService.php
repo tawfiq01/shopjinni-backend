@@ -6,6 +6,8 @@ use App\Domain\Accounting\Models\ChartOfAccount;
 use App\Domain\Accounting\Models\PaymentMethod;
 use App\Domain\Auth\Support\PermissionCatalog;
 use App\Domain\Branches\Models\Branch;
+use App\Domain\Catalog\Models\Color;
+use App\Domain\Catalog\Models\ProductType;
 use App\Domain\Companies\Models\Company;
 use App\Domain\Companies\Support\CurrentCompany;
 use App\Domain\Subscriptions\Models\SubscriptionPlan;
@@ -51,6 +53,42 @@ class CompanyProvisioningService
         ['name' => 'bKash', 'account_code' => '1020'],
         ['name' => 'Nagad', 'account_code' => '1030'],
         ['name' => 'Card / Other MFS', 'account_code' => '1040'],
+    ];
+
+    /**
+     * Default catalog product types (categories), matching the demo
+     * ProductTypeSeeder — every real shop signup gets these too.
+     */
+    public const DEFAULT_PRODUCT_TYPES = [
+        ['name' => 'Smartphone', 'imei_tracking_default' => true],
+        ['name' => 'Feature Phone', 'imei_tracking_default' => null],
+        ['name' => 'Tablet', 'imei_tracking_default' => true],
+        ['name' => 'Smartwatch', 'imei_tracking_default' => false],
+        ['name' => 'Charger', 'imei_tracking_default' => false],
+        ['name' => 'Cable', 'imei_tracking_default' => false],
+        ['name' => 'Earphone', 'imei_tracking_default' => false],
+        ['name' => 'Headphone', 'imei_tracking_default' => false],
+        ['name' => 'Power Bank', 'imei_tracking_default' => false],
+        ['name' => 'Cover', 'imei_tracking_default' => false],
+        ['name' => 'Screen Protector', 'imei_tracking_default' => false],
+        ['name' => 'Other Accessory', 'imei_tracking_default' => false],
+    ];
+
+    /**
+     * Default product colors, matching ColorSeeder — every real shop
+     * signup gets these too.
+     */
+    public const DEFAULT_COLORS = [
+        ['name' => 'Black', 'hex_code' => '#000000'],
+        ['name' => 'White', 'hex_code' => '#FFFFFF'],
+        ['name' => 'Silver', 'hex_code' => '#C0C0C0'],
+        ['name' => 'Space Gray', 'hex_code' => '#4B4B4D'],
+        ['name' => 'Gold', 'hex_code' => '#D4AF37'],
+        ['name' => 'Rose Gold', 'hex_code' => '#B76E79'],
+        ['name' => 'Blue', 'hex_code' => '#2563EB'],
+        ['name' => 'Red', 'hex_code' => '#DC2626'],
+        ['name' => 'Green', 'hex_code' => '#16A34A'],
+        ['name' => 'Purple', 'hex_code' => '#7C3AED'],
     ];
 
     /**
@@ -109,6 +147,14 @@ class CompanyProvisioningService
                         'chart_of_account_id' => $account->id,
                         'is_active' => true,
                     ]);
+                }
+
+                foreach (self::DEFAULT_PRODUCT_TYPES as $type) {
+                    ProductType::create([...$type, 'is_active' => true]);
+                }
+
+                foreach (self::DEFAULT_COLORS as $color) {
+                    Color::create($color);
                 }
 
                 // Roles are per-company (spatie "teams" = company, via
