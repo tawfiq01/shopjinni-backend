@@ -25,7 +25,7 @@ return new class extends Migration
                 'max_users' => 3,
                 'max_products' => 200,
                 'max_branches' => 1,
-                'trial_period_days' => 14,
+                'trial_period_days' => 7,
                 'features' => json_encode([]),
                 'is_active' => true,
                 'sort_order' => 1,
