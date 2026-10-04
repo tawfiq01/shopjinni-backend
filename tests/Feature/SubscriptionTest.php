@@ -200,6 +200,39 @@ class SubscriptionTest extends TestCase
         $this->postJson("/api/admin/companies/{$company->id}/activate")->assertOk()->assertJsonPath('is_active', true);
     }
 
+    public function test_super_admin_can_assign_any_plan_without_changing_subscription_status_or_term(): void
+    {
+        $this->actingAsSuperAdmin();
+        $company = $this->createCompany('Package Change Shop');
+        $subscription = Subscription::where('company_id', $company->id)->firstOrFail();
+        $subscription->update([
+            'status' => Subscription::STATUS_SUSPENDED,
+            'is_lifetime' => false,
+            'current_period_ends_at' => now()->addDays(12),
+        ]);
+        $periodEnd = $subscription->fresh()->current_period_ends_at->toIso8601String();
+        $inactivePlan = SubscriptionPlan::where('slug', 'premium')->firstOrFail();
+        $inactivePlan->update(['is_active' => false]);
+
+        $this->putJson("/api/admin/subscriptions/{$company->id}/plan", ['plan_id' => $inactivePlan->id])
+            ->assertOk()
+            ->assertJsonPath('plan_id', $inactivePlan->id);
+
+        $subscription->refresh();
+        $this->assertSame($inactivePlan->id, $subscription->plan_id);
+        $this->assertSame(Subscription::STATUS_SUSPENDED, $subscription->status);
+        $this->assertSame($periodEnd, $subscription->current_period_ends_at->toIso8601String());
+    }
+
+    public function test_non_super_admin_cannot_assign_a_shop_plan(): void
+    {
+        [$company] = $this->actingAsAdminOnPlan('basic');
+        $premium = SubscriptionPlan::where('slug', 'premium')->firstOrFail();
+
+        $this->putJson("/api/admin/subscriptions/{$company->id}/plan", ['plan_id' => $premium->id])
+            ->assertForbidden();
+    }
+
     public function test_a_non_super_admin_cannot_access_the_admin_panel(): void
     {
         $this->actingAsAdminOnPlan('basic');

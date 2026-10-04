@@ -55,6 +55,7 @@ class CompanyAdminController extends Controller
             'is_active' => $company->is_active,
             'user_count' => $company->users_count,
             'subscription_status' => $company->subscription?->status,
+            'plan_id' => $company->subscription?->plan_id,
             'plan_name' => $company->subscription?->plan?->name,
             'created_at' => $company->created_at?->toIso8601String(),
         ];

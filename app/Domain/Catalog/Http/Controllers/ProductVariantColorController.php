@@ -85,6 +85,14 @@ class ProductVariantColorController extends Controller
         $companyId = $request->user()->company_id;
 
         $data = $request->validate([
+            'color_id' => [
+                'sometimes',
+                Rule::exists('colors', 'id')->where('company_id', $companyId),
+                Rule::unique('product_variant_colors', 'color_id')
+                    ->where('product_variant_id', $sku->product_variant_id)
+                    ->where('company_id', $companyId)
+                    ->ignore($sku->id),
+            ],
             'sku' => ['sometimes', 'string', 'max:255', Rule::unique('product_variant_colors', 'sku')->where('company_id', $companyId)->ignore($sku->id)],
             'barcode' => ['nullable', 'string', 'max:255', Rule::unique('product_variant_colors', 'barcode')->where('company_id', $companyId)->ignore($sku->id)],
             'imei_tracking_enabled' => ['nullable', 'boolean'],
@@ -92,6 +100,8 @@ class ProductVariantColorController extends Controller
             'reorder_level' => ['nullable', 'integer', 'min:0'],
             'selling_price_current' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['sometimes', 'boolean'],
+        ], [
+            'color_id.unique' => 'This variant already has a SKU for that color.',
         ]);
 
         $sku->update($data);

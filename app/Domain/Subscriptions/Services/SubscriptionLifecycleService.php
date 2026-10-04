@@ -49,6 +49,19 @@ class SubscriptionLifecycleService
     }
 
     /**
+     * Super Admin plan assignment preserves the shop's existing billing state.
+     */
+    public function assignPlan(int $companyId, SubscriptionPlan $plan): Subscription
+    {
+        return DB::transaction(function () use ($companyId, $plan) {
+            $subscription = Subscription::where('company_id', $companyId)->lockForUpdate()->firstOrFail();
+            $subscription->update(['plan_id' => $plan->id]);
+
+            return $subscription->fresh();
+        });
+    }
+
+    /**
      * Records a payment and reactivates the subscription in one step —
      * extends from now(), unless the current period hasn't lapsed yet
      * (an early renewal), in which case it extends from that existing

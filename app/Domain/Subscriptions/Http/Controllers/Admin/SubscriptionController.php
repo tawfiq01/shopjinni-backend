@@ -4,6 +4,7 @@ namespace App\Domain\Subscriptions\Http\Controllers\Admin;
 
 use App\Domain\Companies\Models\Company;
 use App\Domain\Subscriptions\Models\Subscription;
+use App\Domain\Subscriptions\Models\SubscriptionPlan;
 use App\Domain\Subscriptions\Services\SubscriptionLifecycleService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -30,6 +31,19 @@ class SubscriptionController extends Controller
         $subscription = $data['status'] === 'suspended'
             ? $this->lifecycle->suspend($company->id)
             : $this->lifecycle->reactivate($company->id);
+
+        return response()->json($subscription->load('plan'));
+    }
+
+    /** Assign any platform plan without changing the shop's current subscription status or dates. */
+    public function updatePlan(Request $request, Company $company)
+    {
+        $data = $request->validate([
+            'plan_id' => ['required', Rule::exists('subscription_plans', 'id')],
+        ]);
+
+        $plan = SubscriptionPlan::findOrFail($data['plan_id']);
+        $subscription = $this->lifecycle->assignPlan($company->id, $plan);
 
         return response()->json($subscription->load('plan'));
     }

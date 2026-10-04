@@ -105,6 +105,7 @@ class StockReportController extends Controller
                 ),
                 'brand' => $model->brand->name,
                 'model' => $model->name,
+                'variant_label' => $sku->variant->label(),
                 'color' => $sku->color->name,
                 'product_type' => $model->productType->name,
                 'imei_tracking_enabled' => $imeiTracked,

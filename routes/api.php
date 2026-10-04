@@ -99,6 +99,7 @@ Route::middleware(['auth:sanctum', 'subscription.active'])->group(function () {
         Route::put('/plans/{plan}', [AdminSubscriptionPlanController::class, 'update']);
 
         Route::get('/subscriptions', [AdminSubscriptionController::class, 'index']);
+        Route::put('/subscriptions/{company}/plan', [AdminSubscriptionController::class, 'updatePlan']);
         Route::put('/subscriptions/{company}/status', [AdminSubscriptionController::class, 'updateStatus']);
 
         Route::get('/payments', [PaymentRecordController::class, 'index']);

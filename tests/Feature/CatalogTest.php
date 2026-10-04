@@ -141,6 +141,41 @@ class CatalogTest extends TestCase
             ->assertJsonValidationErrors('color_id');
     }
 
+    public function test_sku_color_can_be_changed_without_duplicating_a_variant_color_pair(): void
+    {
+        $this->actingAsAdmin();
+
+        $variant = ProductVariant::factory()->create();
+        $black = Color::factory()->create(['name' => 'Black']);
+        $blue = Color::factory()->create(['name' => 'Blue']);
+        $red = Color::factory()->create(['name' => 'Red']);
+
+        $sku = $this->postJson("/api/catalog/variants/{$variant->id}/colors", [
+            'color_id' => $black->id,
+        ])->assertCreated()->json('data');
+
+        $existingBlueSku = $this->postJson("/api/catalog/variants/{$variant->id}/colors", [
+            'color_id' => $blue->id,
+        ])->assertCreated()->json('data');
+
+        $this->putJson("/api/catalog/products/{$sku['id']}", ['color_id' => $red->id])
+            ->assertOk()
+            ->assertJsonPath('data.color.id', $red->id);
+
+        $this->putJson("/api/catalog/products/{$sku['id']}", ['color_id' => $blue->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('color_id');
+
+        $this->assertDatabaseHas('product_variant_colors', [
+            'id' => $sku['id'],
+            'color_id' => $red->id,
+        ]);
+        $this->assertDatabaseHas('product_variant_colors', [
+            'id' => $existingBlueSku['id'],
+            'color_id' => $blue->id,
+        ]);
+    }
+
     public function test_model_cannot_be_deleted_while_it_has_variants(): void
     {
         $this->actingAsAdmin();

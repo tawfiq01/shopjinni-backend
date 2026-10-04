@@ -133,6 +133,8 @@ class ReportsTest extends TestCase
         $sku = ProductVariantColor::factory()->create([
             'color_id' => $color->id,
             'product_variant_id' => ProductVariant::factory()->create([
+                'ram' => '12GB',
+                'storage' => '256GB',
                 'product_model_id' => ProductModel::factory()->create([
                     'product_type_id' => $type->id,
                     'brand_id' => $brand->id,
@@ -143,6 +145,7 @@ class ReportsTest extends TestCase
         $response = $this->getJson('/api/reports/stock')->assertOk();
         $row = collect($response->json('data'))->firstWhere('sku_id', $sku->id);
         $this->assertSame('Accessory', $row['product_type']);
+        $this->assertSame('12GB / 256GB', $row['variant_label']);
 
         $byBrand = $this->getJson('/api/reports/stock?search=SearchBrand')->assertOk();
         $this->assertTrue(collect($byBrand->json('data'))->contains('sku_id', $sku->id));
