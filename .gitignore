@@ -25,3 +25,7 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Packaged deployment bundles (built locally, not source)
+*.tar.gz
+*.zip

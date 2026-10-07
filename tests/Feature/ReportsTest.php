@@ -599,10 +599,18 @@ class ReportsTest extends TestCase
         $this->assertEquals(24000, $adminResponse->json('unit.purchase_cost'));
         $types = collect($adminResponse->json('movements'))->pluck('type');
         $this->assertSame(['purchase', 'sale'], $types->all());
+        $saleMovement = collect($adminResponse->json('movements'))
+            ->firstWhere('type', 'sale');
+        $this->assertEquals(25000, $saleMovement['sale_unit_price']);
+        $this->assertEquals(25000, $saleMovement['sale_total']);
+        $this->assertNotEmpty($saleMovement['sale_date']);
+        $this->assertNotEmpty($saleMovement['sale_invoice_number']);
 
         $this->actingAsSalesperson();
         $spResponse = $this->getJson('/api/reports/imei-history?imei=400000000000001')->assertOk();
         $spResponse->assertJsonMissingPath('unit.purchase_cost');
+        $spSale = collect($spResponse->json('movements'))->firstWhere('type', 'sale');
+        $this->assertEquals(25000, $spSale['sale_total']);
     }
 
     public function test_imei_history_returns_404_for_unknown_imei(): void

@@ -4,6 +4,7 @@ namespace App\Domain\Reports\Http\Controllers;
 
 use App\Domain\Inventory\Models\ImeiUnit;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Sales\Models\SaleItem;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
@@ -23,17 +24,42 @@ class ImeiHistoryController extends Controller
             return response()->json(['message' => 'No unit found with that IMEI.'], 404);
         }
 
+        $saleItems = SaleItem::where('imei_unit_id', $unit->id)
+            ->with('salesInvoice.customer')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+        $saleIndex = 0;
+
         $movements = StockMovement::where('imei_unit_id', $unit->id)
             ->with('branch')
             ->orderBy('created_at')
+            ->orderBy('id')
             ->get()
-            ->map(fn (StockMovement $movement) => [
-                'date' => $movement->created_at->toDateTimeString(),
-                'type' => $movement->movement_type,
-                'branch' => $movement->branch->name,
-                'quantity_change' => $movement->quantity_change,
-                ...($canViewCost ? ['unit_cost' => $movement->unit_cost] : []),
-            ]);
+            ->map(function (StockMovement $movement) use ($canViewCost, $saleItems, &$saleIndex) {
+                $saleDetails = [];
+                if ($movement->movement_type === StockMovement::TYPE_SALE && isset($saleItems[$saleIndex])) {
+                    $saleItem = $saleItems[$saleIndex++];
+                    $invoice = $saleItem->salesInvoice;
+                    $saleDetails = [
+                        'sale_date' => $invoice->sale_date->toDateString(),
+                        'sale_invoice_number' => $invoice->invoice_number,
+                        'sale_customer' => $invoice->customer?->name,
+                        'sale_unit_price' => (float) $saleItem->unit_price,
+                        'sale_discount' => (float) $saleItem->discount,
+                        'sale_total' => (float) $saleItem->line_total,
+                    ];
+                }
+
+                return [
+                    'date' => $movement->created_at->toDateTimeString(),
+                    'type' => $movement->movement_type,
+                    'branch' => $movement->branch->name,
+                    'quantity_change' => $movement->quantity_change,
+                    ...($canViewCost ? ['unit_cost' => $movement->unit_cost] : []),
+                    ...$saleDetails,
+                ];
+            });
 
         $model = $unit->sku->variant->model;
 
