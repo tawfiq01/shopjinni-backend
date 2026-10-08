@@ -12,6 +12,7 @@ use App\Domain\Sales\Models\PhoneExchange;
 use App\Domain\Sales\Models\SalesReturn;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Http\Middleware\HandleCors;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -50,5 +51,13 @@ class AppServiceProvider extends ServiceProvider
             'purchase_return' => PurchaseReturn::class,
             'phone_exchange' => PhoneExchange::class,
         ]);
+
+        // Avatar/logo images set their own Access-Control-Allow-Origin: *
+        // (they're meant to be embeddable from anywhere, e.g. in an
+        // <img> tag regardless of origin) — the global CORS middleware
+        // would otherwise overwrite that with the restricted frontend
+        // origin from config/cors.php, since these routes live under
+        // api/* too.
+        HandleCors::skipWhen(fn ($request) => $request->is('api/avatars/*') || $request->is('api/logo/*'));
     }
 }

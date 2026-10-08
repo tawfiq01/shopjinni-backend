@@ -165,6 +165,7 @@ Route::middleware(['auth:sanctum', 'subscription.active'])->group(function () {
         Route::post('/distributors', [DistributorController::class, 'store']);
         Route::put('/distributors/{distributor}', [DistributorController::class, 'update']);
         Route::delete('/distributors/{distributor}', [DistributorController::class, 'destroy']);
+        Route::post('/distributors/{distributor}/payments', [DistributorController::class, 'pay']);
     });
 
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
