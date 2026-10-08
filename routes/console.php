@@ -17,3 +17,20 @@ Artisan::command('inspire', function () {
 Schedule::command('backup:check-schedule')->everyMinute();
 
 Schedule::command('subscriptions:check-status')->daily();
+
+// Debugging aid for "IMEI not found" reports on hosts where `tinker` is
+// unusable (shared hosting commonly disables the Phar extension that
+// psysh/tinker needs to boot, independent of whether this app uses phars).
+// Bypasses the per-company scope so a mismatched company_id is visible
+// instead of silently looking like "no such IMEI".
+Artisan::command('imei:check {imei}', function (string $imei) {
+    $rows = \App\Domain\Inventory\Models\ImeiUnit::withoutGlobalScopes()
+        ->where('imei1', $imei)
+        ->orWhere('imei2', $imei)
+        ->get(['id', 'company_id', 'imei1', 'imei2', 'status']);
+
+    $this->info($rows->count().' row(s) found for that IMEI (ignoring the company filter):');
+    foreach ($rows as $row) {
+        $this->line($row->toJson());
+    }
+})->purpose('Look up an IMEI across all companies, bypassing tenant scoping');

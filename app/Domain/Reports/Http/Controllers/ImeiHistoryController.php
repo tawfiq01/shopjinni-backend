@@ -41,14 +41,16 @@ class ImeiHistoryController extends Controller
                 if ($movement->movement_type === StockMovement::TYPE_SALE && isset($saleItems[$saleIndex])) {
                     $saleItem = $saleItems[$saleIndex++];
                     $invoice = $saleItem->salesInvoice;
-                    $saleDetails = [
-                        'sale_date' => $invoice->sale_date->toDateString(),
-                        'sale_invoice_number' => $invoice->invoice_number,
-                        'sale_customer' => $invoice->customer?->name,
-                        'sale_unit_price' => (float) $saleItem->unit_price,
-                        'sale_discount' => (float) $saleItem->discount,
-                        'sale_total' => (float) $saleItem->line_total,
-                    ];
+                    if ($invoice) {
+                        $saleDetails = [
+                            'sale_date' => $invoice->sale_date->toDateString(),
+                            'sale_invoice_number' => $invoice->invoice_number,
+                            'sale_customer' => $invoice->customer?->name,
+                            'sale_unit_price' => (float) $saleItem->unit_price,
+                            'sale_discount' => (float) $saleItem->discount,
+                            'sale_total' => (float) $saleItem->line_total,
+                        ];
+                    }
                 }
 
                 return [
