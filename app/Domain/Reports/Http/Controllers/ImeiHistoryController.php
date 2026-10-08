@@ -14,11 +14,36 @@ class ImeiHistoryController extends Controller
     {
         $data = $request->validate(['imei' => ['required', 'string']]);
         $canViewCost = $request->user()->can('reports.view-cost');
+        $term = trim($data['imei']);
 
-        $unit = ImeiUnit::where('imei1', $data['imei'])
-            ->orWhere('imei2', $data['imei'])
-            ->with(['sku.variant.model.brand', 'sku.color', 'purchaseItem.purchaseInvoice.distributor'])
+        $withRelations = ['sku.variant.model.brand', 'sku.color', 'purchaseItem.purchaseInvoice.distributor'];
+
+        $unit = ImeiUnit::where('imei1', $term)
+            ->orWhere('imei2', $term)
+            ->with($withRelations)
             ->first();
+
+        // POS lets staff scan/type a partial IMEI (see PosSearchController's
+        // `like` matching), so a full-length search here would otherwise
+        // show "not found" for the same partial value POS just matched.
+        // Only auto-resolve the partial match when it's unambiguous — this
+        // report surfaces purchase cost and distributor info, so silently
+        // picking the wrong unit out of several matches would be worse than
+        // asking for more digits.
+        if (! $unit) {
+            $matches = ImeiUnit::where('imei1', 'like', "%{$term}%")
+                ->orWhere('imei2', 'like', "%{$term}%")
+                ->with($withRelations)
+                ->get();
+
+            if ($matches->count() > 1) {
+                return response()->json([
+                    'message' => 'Multiple units match that IMEI — enter more digits.',
+                ], 422);
+            }
+
+            $unit = $matches->first();
+        }
 
         if (! $unit) {
             return response()->json(['message' => 'No unit found with that IMEI.'], 404);

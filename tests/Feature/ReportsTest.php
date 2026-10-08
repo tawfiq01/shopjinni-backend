@@ -620,4 +620,54 @@ class ReportsTest extends TestCase
 
         $this->getJson('/api/reports/imei-history?imei=999999999999999')->assertNotFound();
     }
+
+    public function test_imei_history_matches_an_unambiguous_partial_imei(): void
+    {
+        $this->actingAsAdmin();
+        $this->bootLedger();
+        $sku = $this->imeiSku();
+        $distributor = Distributor::factory()->create();
+
+        $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [[
+                'product_variant_color_id' => $sku->id,
+                'quantity' => 1,
+                'unit_cost' => 24000,
+                'imeis' => [['imei1' => '400000000000001']],
+            ]],
+        ])->assertCreated();
+
+        // POS matches IMEIs with a `like` substring search, so staff are
+        // used to typing/scanning only part of the number — the report
+        // should resolve the same partial value when it's unambiguous.
+        $response = $this->getJson('/api/reports/imei-history?imei=0000000001')->assertOk();
+        $this->assertSame('400000000000001', $response->json('unit.imei1'));
+    }
+
+    public function test_imei_history_rejects_an_ambiguous_partial_imei(): void
+    {
+        $this->actingAsAdmin();
+        $this->bootLedger();
+        $sku = $this->imeiSku();
+        $distributor = Distributor::factory()->create();
+
+        $this->postJson('/api/purchases', [
+            'distributor_id' => $distributor->id,
+            'purchase_date' => now()->toDateString(),
+            'items' => [[
+                'product_variant_color_id' => $sku->id,
+                'quantity' => 2,
+                'unit_cost' => 24000,
+                'imeis' => [
+                    ['imei1' => '400000000000001'],
+                    ['imei1' => '400000000000002'],
+                ],
+            ]],
+        ])->assertCreated();
+
+        $this->getJson('/api/reports/imei-history?imei=40000000000000')
+            ->assertStatus(422);
+    }
 }
