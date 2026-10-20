@@ -25,9 +25,13 @@ class ProductVariant extends Model
         return ['is_active' => 'boolean'];
     }
 
+    /**
+     * withTrashed: a soft-deleted model must keep resolving so historical
+     * sales/purchase line items that reference this variant keep showing its name.
+     */
     public function model(): BelongsTo
     {
-        return $this->belongsTo(ProductModel::class, 'product_model_id');
+        return $this->belongsTo(ProductModel::class, 'product_model_id')->withTrashed();
     }
 
     public function colors(): HasMany

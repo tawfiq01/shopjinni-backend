@@ -36,7 +36,7 @@ class PhoneExchangeController extends Controller
         $companyId = $request->user()->company_id;
 
         $data = $request->validate([
-            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $companyId)],
+            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
             'exchange_date' => ['required', 'date'],
             'old_phone.product_variant_color_id' => ['required', Rule::exists('product_variant_colors', 'id')->where('company_id', $companyId)],
             'old_phone.exchange_value' => ['required', 'numeric', 'min:0'],

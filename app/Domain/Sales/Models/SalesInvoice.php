@@ -43,9 +43,13 @@ class SalesInvoice extends Model
         return $this->belongsTo(Branch::class);
     }
 
+    /**
+     * withTrashed: a soft-deleted customer must keep resolving so past
+     * invoices still show who the sale was for.
+     */
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
     }
 
     public function items(): HasMany

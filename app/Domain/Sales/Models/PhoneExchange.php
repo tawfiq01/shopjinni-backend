@@ -39,8 +39,12 @@ class PhoneExchange extends Model
         return $this->belongsTo(ImeiUnit::class, 'old_imei_unit_id');
     }
 
+    /**
+     * withTrashed: a soft-deleted customer must keep resolving so past
+     * exchanges still show who the sale was for.
+     */
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
     }
 }

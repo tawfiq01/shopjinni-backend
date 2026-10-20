@@ -48,7 +48,7 @@ class ProductVariantColorController extends Controller
         $data = $request->validate([
             'color_id' => [
                 'required',
-                Rule::exists('colors', 'id')->where('company_id', $companyId),
+                Rule::exists('colors', 'id')->where('company_id', $companyId)->whereNull('deleted_at'),
                 Rule::unique('product_variant_colors', 'color_id')->where('product_variant_id', $variant->id)->where('company_id', $companyId),
             ],
             'sku' => ['nullable', 'string', 'max:255', Rule::unique('product_variant_colors', 'sku')->where('company_id', $companyId)],
@@ -87,7 +87,7 @@ class ProductVariantColorController extends Controller
         $data = $request->validate([
             'color_id' => [
                 'sometimes',
-                Rule::exists('colors', 'id')->where('company_id', $companyId),
+                Rule::exists('colors', 'id')->where('company_id', $companyId)->whereNull('deleted_at'),
                 Rule::unique('product_variant_colors', 'color_id')
                     ->where('product_variant_id', $sku->product_variant_id)
                     ->where('company_id', $companyId)

@@ -38,9 +38,13 @@ class ProductVariantColor extends Model
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
 
+    /**
+     * withTrashed: a soft-deleted color must keep resolving so historical
+     * sales/purchase line items that reference this SKU keep showing its name.
+     */
     public function color(): BelongsTo
     {
-        return $this->belongsTo(Color::class);
+        return $this->belongsTo(Color::class)->withTrashed();
     }
 
     /**

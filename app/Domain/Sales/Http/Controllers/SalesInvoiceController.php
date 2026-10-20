@@ -49,7 +49,7 @@ class SalesInvoiceController extends Controller
         $companyId = $request->user()->company_id;
 
         $data = $request->validate([
-            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $companyId)],
+            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
             'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)],
             'invoice_number' => ['nullable', 'string', 'max:255', Rule::unique('sales_invoices', 'invoice_number')->where('company_id', $companyId)],
             'sale_date' => ['required', 'date'],

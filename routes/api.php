@@ -124,6 +124,7 @@ Route::middleware(['auth:sanctum', 'subscription.active'])->group(function () {
 
         Route::post('/catalog/product-types', [ProductTypeController::class, 'store']);
         Route::put('/catalog/product-types/{productType}', [ProductTypeController::class, 'update']);
+        Route::delete('/catalog/product-types/{productType}', [ProductTypeController::class, 'destroy']);
 
         Route::post('/catalog/colors', [ColorController::class, 'store']);
         Route::put('/catalog/colors/{color}', [ColorController::class, 'update']);

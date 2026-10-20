@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domain\Accounting\Models\ChartOfAccount;
 use App\Domain\Companies\Models\Company;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\Sales\Models\SalesInvoice;
 use App\Models\User;
 use Database\Seeders\ChartOfAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +71,39 @@ class CustomerTest extends TestCase
         ])->assertCreated()->json('data.id');
 
         $this->deleteJson("/api/customers/{$id}")->assertStatus(409);
+    }
+
+    public function test_deleting_a_customer_soft_deletes_it_and_hides_it_from_the_index(): void
+    {
+        $this->actingAsAdmin();
+
+        $id = $this->postJson('/api/customers', [
+            'name' => 'No History',
+            'mobile' => '01944444444',
+        ])->assertCreated()->json('data.id');
+
+        $this->deleteJson("/api/customers/{$id}")->assertNoContent();
+
+        $this->assertSoftDeleted('customers', ['id' => $id]);
+        $this->getJson('/api/customers')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_deleted_customer_still_resolves_its_name_on_a_sale_that_referenced_it(): void
+    {
+        $this->actingAsAdmin();
+
+        $customer = Customer::factory()->create(['name' => 'Karim Hossain']);
+
+        $invoice = SalesInvoice::create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-TEST-1',
+            'sale_date' => now()->toDateString(),
+        ]);
+
+        $this->deleteJson("/api/customers/{$customer->id}")->assertNoContent();
+
+        $invoice->refresh();
+        $this->assertSame('Karim Hossain', $invoice->customer->name);
     }
 
     public function test_user_without_permission_cannot_create_a_customer(): void

@@ -5,7 +5,6 @@ namespace App\Domain\Catalog\Http\Controllers;
 use App\Domain\Catalog\Http\Resources\ProductModelResource;
 use App\Domain\Catalog\Models\ProductModel;
 use App\Http\Controllers\Controller;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -31,12 +30,27 @@ class ProductModelController extends Controller
         $companyId = $request->user()->company_id;
 
         $data = $request->validate([
-            'brand_id' => ['required', Rule::exists('brands', 'id')->where('company_id', $companyId)],
-            'product_type_id' => ['required', Rule::exists('product_types', 'id')->where('company_id', $companyId)],
+            'brand_id' => ['required', Rule::exists('brands', 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
+            'product_type_id' => ['required', Rule::exists('product_types', 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
             'name' => ['required', 'string', 'max:255'],
             'warranty_months_default' => ['nullable', 'integer', 'min:0'],
             'imei_tracking_enabled' => ['nullable', 'boolean'],
         ]);
+
+        // Re-adding a name that was previously soft-deleted under the same
+        // brand restores that same row instead of hitting the (brand_id,
+        // name) unique index.
+        $trashed = ProductModel::onlyTrashed()
+            ->where('brand_id', $data['brand_id'])
+            ->where('name', $data['name'])
+            ->first();
+        if ($trashed) {
+            $trashed->restore();
+            $trashed->update([...$data, 'is_active' => true]);
+            $trashed->load(['brand', 'productType']);
+
+            return new ProductModelResource($trashed);
+        }
 
         $model = ProductModel::create([...$data, 'is_active' => true]);
         $model->load(['brand', 'productType']);
@@ -56,8 +70,8 @@ class ProductModelController extends Controller
         $companyId = $request->user()->company_id;
 
         $data = $request->validate([
-            'brand_id' => ['sometimes', Rule::exists('brands', 'id')->where('company_id', $companyId)],
-            'product_type_id' => ['sometimes', Rule::exists('product_types', 'id')->where('company_id', $companyId)],
+            'brand_id' => ['sometimes', Rule::exists('brands', 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
+            'product_type_id' => ['sometimes', Rule::exists('product_types', 'id')->where('company_id', $companyId)->whereNull('deleted_at')],
             'name' => ['sometimes', 'string', 'max:255'],
             'warranty_months_default' => ['nullable', 'integer', 'min:0'],
             'imei_tracking_enabled' => ['nullable', 'boolean'],
@@ -72,13 +86,13 @@ class ProductModelController extends Controller
 
     public function destroy(ProductModel $productModel)
     {
-        try {
-            $productModel->delete();
-        } catch (QueryException) {
+        if ($productModel->variants()->exists()) {
             return response()->json([
                 'message' => 'This model has variants under it and cannot be deleted. Deactivate it instead.',
             ], 409);
         }
+
+        $productModel->delete();
 
         return response()->json(status: 204);
     }

@@ -186,4 +186,107 @@ class CatalogTest extends TestCase
         $this->deleteJson("/api/catalog/models/{$model->id}")
             ->assertStatus(409);
     }
+
+    public function test_deleting_a_brand_soft_deletes_it_and_hides_it_from_the_index(): void
+    {
+        $this->actingAsAdmin();
+
+        $brand = Brand::factory()->create(['name' => 'Samsung']);
+
+        $this->deleteJson("/api/catalog/brands/{$brand->id}")->assertNoContent();
+
+        $this->assertSoftDeleted('brands', ['id' => $brand->id]);
+        $this->getJson('/api/catalog/brands')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_recreating_a_brand_with_the_same_name_after_deletion_restores_it(): void
+    {
+        $this->actingAsAdmin();
+
+        $original = $this->postJson('/api/catalog/brands', ['name' => 'Samsung'])
+            ->assertCreated()->json('data');
+
+        $this->deleteJson("/api/catalog/brands/{$original['id']}")->assertNoContent();
+
+        // Restoring an existing (trashed) row is a 200, not a 201 — Laravel's
+        // resource auto-status only flips to 201 for a genuine fresh insert.
+        $recreated = $this->postJson('/api/catalog/brands', ['name' => 'Samsung'])
+            ->assertOk()->json('data');
+
+        $this->assertSame($original['id'], $recreated['id']);
+        $this->assertTrue($recreated['is_active']);
+        $this->assertDatabaseCount('brands', 1);
+    }
+
+    public function test_deleted_brand_still_resolves_its_name_on_a_model_that_referenced_it(): void
+    {
+        $this->actingAsAdmin();
+
+        $brand = Brand::factory()->create(['name' => 'Samsung']);
+        $type = ProductType::factory()->create();
+        $model = ProductModel::factory()->create(['brand_id' => $brand->id, 'product_type_id' => $type->id]);
+
+        // A brand with a live model under it can't be deleted at all...
+        $this->deleteJson("/api/catalog/brands/{$brand->id}")->assertStatus(409);
+
+        // ...but once the model itself is gone, the brand can be deleted too,
+        // and the now-trashed model should still resolve the brand's name
+        // (so past sales/purchase history never shows a blank brand).
+        $this->deleteJson("/api/catalog/models/{$model->id}")->assertNoContent();
+        $this->deleteJson("/api/catalog/brands/{$brand->id}")->assertNoContent();
+
+        $model->refresh();
+        $this->assertSame('Samsung', $model->brand->name);
+    }
+
+    public function test_product_type_cannot_be_deleted_while_it_has_models(): void
+    {
+        $this->actingAsAdmin();
+
+        $type = ProductType::factory()->create();
+        ProductModel::factory()->create(['product_type_id' => $type->id]);
+
+        $this->deleteJson("/api/catalog/product-types/{$type->id}")->assertStatus(409);
+    }
+
+    public function test_product_type_can_be_soft_deleted(): void
+    {
+        $this->actingAsAdmin();
+
+        $type = ProductType::factory()->create();
+
+        $this->deleteJson("/api/catalog/product-types/{$type->id}")->assertNoContent();
+
+        $this->assertSoftDeleted('product_types', ['id' => $type->id]);
+    }
+
+    public function test_color_cannot_be_deleted_while_used_by_a_sku(): void
+    {
+        $this->actingAsAdmin();
+
+        $variant = ProductVariant::factory()->create();
+        $color = Color::factory()->create();
+
+        $this->postJson("/api/catalog/variants/{$variant->id}/colors", ['color_id' => $color->id])
+            ->assertCreated();
+
+        $this->deleteJson("/api/catalog/colors/{$color->id}")->assertStatus(409);
+    }
+
+    public function test_color_can_be_soft_deleted_and_recreated(): void
+    {
+        $this->actingAsAdmin();
+
+        $original = $this->postJson('/api/catalog/colors', ['name' => 'Midnight Black'])
+            ->assertCreated()->json('data');
+
+        $this->deleteJson("/api/catalog/colors/{$original['id']}")->assertNoContent();
+        $this->assertSoftDeleted('colors', ['id' => $original['id']]);
+
+        $recreated = $this->postJson('/api/catalog/colors', ['name' => 'Midnight Black'])
+            ->assertOk()->json('data');
+
+        $this->assertSame($original['id'], $recreated['id']);
+        $this->assertDatabaseCount('colors', 1);
+    }
 }
