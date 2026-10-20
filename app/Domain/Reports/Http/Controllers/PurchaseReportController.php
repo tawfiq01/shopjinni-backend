@@ -13,8 +13,6 @@ class PurchaseReportController extends Controller
 {
     public function summary(Request $request)
     {
-        $this->requireAdvancedReports();
-
         $from = ($request->date('from') ?? now()->subDays(29))->startOfDay();
         $to = ($request->date('to') ?? now())->endOfDay();
 
@@ -98,8 +96,10 @@ class PurchaseReportController extends Controller
     }
 
     /**
-     * Wholesale-cost reports demonstrate spec §8's feature-flag mechanism:
-     * Basic plans can't see them at all, Premium can.
+     * Exact per-unit wholesale cost history is the one purchase report still
+     * gated by spec §8's feature-flag mechanism (Basic can't see it, Premium
+     * can). The purchase summary/totals report is not gated this way — it's
+     * available on every plan, same as the sales summary report.
      */
     private function requireAdvancedReports(): void
     {

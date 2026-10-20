@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domain\Auth\Support\PermissionCatalog;
+use App\Domain\Catalog\Models\ProductVariantColor;
 use App\Domain\Companies\Models\Company;
 use App\Domain\Subscriptions\Models\Subscription;
 use App\Domain\Subscriptions\Models\SubscriptionPlan;
@@ -147,16 +148,26 @@ class SubscriptionTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('plan_limit');
     }
 
-    public function test_advanced_reports_require_the_feature_flag(): void
+    public function test_purchase_summary_is_available_on_every_plan(): void
     {
+        // Unlike price-history (exact wholesale unit cost), the purchase
+        // totals/summary report isn't feature-gated — same as sales summary.
         $this->actingAsAdminOnPlan('basic'); // features: []
-        $this->getJson('/api/reports/purchases/summary')->assertForbidden();
+        $this->getJson('/api/reports/purchases/summary')->assertOk();
     }
 
-    public function test_premium_plan_can_access_advanced_reports(): void
+    public function test_price_history_requires_the_advanced_reports_feature_flag(): void
+    {
+        $this->actingAsAdminOnPlan('basic'); // features: []
+        $this->getJson('/api/reports/purchases/price-history?sku_id=1')->assertForbidden();
+    }
+
+    public function test_premium_plan_can_access_price_history(): void
     {
         $this->actingAsAdminOnPlan('premium'); // features: ['advanced_reports']
-        $this->getJson('/api/reports/purchases/summary')->assertOk();
+        $sku = ProductVariantColor::factory()->create();
+
+        $this->getJson("/api/reports/purchases/price-history?sku_id={$sku->id}")->assertOk();
     }
 
     public function test_a_blocked_subscription_status_blocks_business_routes_but_not_billing_routes(): void
